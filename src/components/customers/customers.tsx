@@ -12,6 +12,8 @@ import { useNotice } from "@/components/layout/notice";
 import { BackLink } from "@/components/payroll/back-link";
 import { AddProjectDialog, ProjectRows } from "@/components/projects/project-list";
 import { BillingRecords } from "@/components/projects/invoiced";
+import { InvoiceRows } from "@/components/cashflow/invoices";
+import { listInvoices } from "@/lib/domain/quickbooks-sync";
 import { useBackoffice } from "@/lib/data/backoffice-provider";
 import { billingBreakdown, CADENCE_LABEL } from "@/lib/domain/billing";
 import { formatCents } from "@/lib/domain/money";
@@ -161,8 +163,9 @@ export function CustomerProfileRoute() {
         </div>
         {t.projects.length ? <ProjectRows data={state.data} projects={t.projects} /> : <p className="rounded-xl border border-dashed border-slate-300 p-4 text-sm text-slate-600">No projects yet.</p>}
       </section>
+      <CustomerInvoices data={state.data} customerId={c.id} />
       <section aria-labelledby="cust-invoiced" className="mt-8 space-y-3">
-        <h2 id="cust-invoiced" className="text-sm font-semibold uppercase tracking-wide text-slate-600">Invoiced</h2>
+        <h2 id="cust-invoiced" className="text-sm font-semibold uppercase tracking-wide text-slate-600">Hours marked invoiced</h2>
         <BillingRecords data={state.data} records={state.data.billingRecords.filter((r) => r.customerId === c.id).sort((a, b) => (a.invoicedOn < b.invoicedOn ? 1 : -1))} />
       </section>
     </>
@@ -195,5 +198,20 @@ function EditCustomerDialog({ customer }: { customer: Customer }) {
         </DialogContent>
       ) : null}
     </Dialog>
+  );
+}
+
+function CustomerInvoices({ data, customerId }: { data: BackofficeData; customerId: string }) {
+  const { today } = useBackoffice();
+  const invoices = listInvoices(data, today).filter((v) => v.customerId === customerId);
+  return (
+    <section aria-labelledby="cust-qb-invoices" className="mt-8 space-y-3">
+      <h2 id="cust-qb-invoices" className="text-sm font-semibold uppercase tracking-wide text-slate-600">QuickBooks invoices ({invoices.length})</h2>
+      {invoices.length ? (
+        <InvoiceRows data={data} invoices={invoices} showCustomer={false} />
+      ) : (
+        <p className="rounded-xl border border-dashed border-slate-300 p-4 text-sm text-slate-600">No invoices from QuickBooks for this customer yet.</p>
+      )}
+    </section>
   );
 }

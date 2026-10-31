@@ -4,6 +4,8 @@ import type { RecordPaymentInput } from "@/lib/domain/payroll";
 import type { CustomerInput, ProjectInput } from "@/lib/domain/billing";
 import type { ContractorInput } from "@/lib/domain/contractors";
 import type { ExpenseInput } from "@/lib/domain/expenses";
+import type { SyncResult } from "@/lib/domain/quickbooks-sync";
+import type { QboInvoice, QboPayment } from "@/lib/integrations/quickbooks";
 import type { Adjustment, AdjustmentKind, BackofficeData, Contractor, ContractorRate, FinalizedPayroll, ImportBatch, BillingRecord, Customer, InvoiceReceipt, PaymentAccount, PaymentRecord, Project, RecurringExpense } from "@/lib/domain/types";
 
 /**
@@ -45,13 +47,15 @@ export interface BackofficeRepository {
   /** After creating the invoice in QuickBooks: mark the project's uninvoiced hours invoiced. */
   markInvoiced(input: { projectId: string; through?: ISODate; invoicedOn: ISODate; quickbooksInvoiceRef?: string }): Promise<BillingRecord>;
   removeBillingRecord(id: string): Promise<void>;
-  // Cash flow
-  /**
-   * Store an invoice payment. In production these arrive from QuickBooks via
-   * Slashbin; the prototype also uses it for clearly labeled simulated payments.
-   * Duplicate payment IDs are ignored.
-   */
-  recordInvoiceReceipt(input: Omit<InvoiceReceipt, "id">): Promise<{ receipt: InvoiceReceipt; duplicate: boolean }>;
+  // QuickBooks invoices & payments (source of truth: QuickBooks via Slashbin)
+  /** Apply a batch delivered from QuickBooks. In production this runs server-side from the Slashbin endpoint. */
+  syncQuickBooks(batch: { invoices?: QboInvoice[]; payments?: QboPayment[] }, today: ISODate): Promise<SyncResult>;
+  /** Owner override: mark an invoice paid in Backoffice (null clears it). Never written to QuickBooks. */
+  setInvoiceManuallyPaid(invoiceId: string, value: { on: ISODate; note?: string } | null): Promise<void>;
+  /** Mark a received payment done/handled (null reopens it). */
+  setPaymentDone(receiptId: string, value: { on: ISODate; note?: string } | null): Promise<void>;
+  /** Prototype only: emulate a QuickBooks payment arriving. */
+  simulateQuickBooksPayment?: (input: { customerId: string; amountCents: Cents; receivedOn: ISODate; invoiceId?: string; paymentRef?: string }, today: ISODate) => Promise<InvoiceReceipt>;
   /** Only available for sample data. Never present on a live repository. */
   resetDemo?: () => Promise<BackofficeData>;
 }

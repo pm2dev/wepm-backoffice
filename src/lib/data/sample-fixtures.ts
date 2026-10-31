@@ -5,7 +5,7 @@
  * records and payments are internally consistent.
  */
 import { markInvoiced } from "@/lib/domain/billing";
-import { recordInvoiceReceipt } from "@/lib/domain/cashflow";
+import { setPaymentDone, syncQuickBooks } from "@/lib/domain/quickbooks-sync";
 import { listCharges, setChargeAmount, setChargesPaid } from "@/lib/domain/expenses";
 import { finalizePayroll, recordPayment, draftKey, addAdjustment, type IdFactory } from "@/lib/domain/payroll";
 import type { BackofficeData, TimeEntry, TimeException } from "@/lib/domain/types";
@@ -52,7 +52,7 @@ function entries(
 export function buildSampleData(): BackofficeData {
   const id = sequentialIds();
   let data: BackofficeData = {
-    schemaVersion: 5,
+    schemaVersion: 6,
     contractors: [
       {
         id: "c_maya",
@@ -121,6 +121,7 @@ export function buildSampleData(): BackofficeData {
     ],
     billingRecords: [],
     invoiceReceipts: [],
+    quickbooksInvoices: [],
     timeEntries: [
       // Maya — Oct 5–11 and Oct 12–18 (finalized below), Oct 19–25 crosses her Oct 21 raise
       ...entries("c_maya", "wepm_ts_m1005", "2026-10-12", [
@@ -275,10 +276,30 @@ export function buildSampleData(): BackofficeData {
   data = markInvoiced(data, { projectId: "p_acme", through: "2026-10-11", invoicedOn: "2026-10-12", quickbooksInvoiceRef: "INV-2026-031" }, id).data;
   data = markInvoiced(data, { projectId: "p_northwind", through: "2026-10-11", invoicedOn: "2026-10-12", quickbooksInvoiceRef: "INV-2026-032" }, id).data;
 
-  // Cash flow: QuickBooks payments received for those invoices.
-  const inv = (ref: string) => data.billingRecords.find((r) => r.quickbooksInvoiceRef === ref)!;
-  data = recordInvoiceReceipt(data, { externalPaymentId: "qbo-pmt-5521", customerId: "cust_northwind", quickbooksCustomerId: "QB-1077", invoiceRef: "INV-2026-032", amountCents: inv("INV-2026-032").amountCents, receivedOn: "2026-10-27" }, id).data;
-  data = recordInvoiceReceipt(data, { externalPaymentId: "qbo-pmt-5538", customerId: "cust_acme", quickbooksCustomerId: "QB-1042", invoiceRef: "INV-2026-031", amountCents: 150000, receivedOn: "2026-10-30" }, id).data;
+  // QuickBooks (sample): invoices and customer payments as Slashbin would deliver them.
+  const inv031 = data.billingRecords.find((r) => r.quickbooksInvoiceRef === "INV-2026-031")!.amountCents / 100;
+  const inv032 = data.billingRecords.find((r) => r.quickbooksInvoiceRef === "INV-2026-032")!.amountCents / 100;
+  data = syncQuickBooks(
+    data,
+    {
+      invoices: [
+        { Id: "1028", DocNumber: "INV-2026-028", TxnDate: "2026-09-14", DueDate: "2026-09-29", TotalAmt: 6250, Balance: 0, CustomerRef: { value: "QB-1042", name: "Acme Corp" } },
+        { Id: "1030", DocNumber: "INV-2026-030", TxnDate: "2026-10-01", DueDate: "2026-10-15", TotalAmt: 2800, Balance: 2800, CustomerRef: { value: "QB-1077", name: "Northwind" } },
+        { Id: "1031", DocNumber: "INV-2026-031", TxnDate: "2026-10-12", DueDate: "2026-10-27", TotalAmt: inv031, Balance: inv031 - 1500, CustomerRef: { value: "QB-1042", name: "Acme Corp" } },
+        { Id: "1032", DocNumber: "INV-2026-032", TxnDate: "2026-10-12", DueDate: "2026-10-26", TotalAmt: inv032, Balance: 0, CustomerRef: { value: "QB-1077", name: "Northwind" } },
+      ],
+      payments: [
+        { Id: "5530", TxnDate: "2026-09-29", TotalAmt: 6250, PaymentRefNum: "ACH 88120", CustomerRef: { value: "QB-1042" }, Line: [{ Amount: 6250, LinkedTxn: [{ TxnId: "1028", TxnType: "Invoice" }] }] },
+        { Id: "5521", TxnDate: "2026-10-27", TotalAmt: inv032, PaymentRefNum: "Check 4417", CustomerRef: { value: "QB-1077" }, Line: [{ Amount: inv032, LinkedTxn: [{ TxnId: "1032", TxnType: "Invoice" }] }] },
+        { Id: "5538", TxnDate: "2026-10-30", TotalAmt: 1500, PaymentRefNum: "ACH 90233", CustomerRef: { value: "QB-1042" }, Line: [{ Amount: 1500, LinkedTxn: [{ TxnId: "1031", TxnType: "Invoice" }] }] },
+      ],
+    },
+    "2026-10-31",
+    id,
+    { sample: true },
+  ).data;
+  // The September payment was already handled.
+  data = setPaymentDone(data, data.invoiceReceipts.find((r) => r.externalPaymentId === "5530")!.id, { on: "2026-09-30", note: "Paid September payroll and bills." });
 
   return data;
 }
