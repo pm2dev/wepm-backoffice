@@ -1,5 +1,6 @@
 "use client";
 
+import { routes } from "@/lib/routes";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
@@ -15,7 +16,7 @@ import { PayrollTabs } from "./payroll-tabs";
 function describeAllocation(data: BackofficeData, a: PaymentAllocation) {
   if (a.obligation.kind === "payroll") {
     const p = data.payrolls.find((x) => x.id === a.obligation.id);
-    return p ? { text: `${p.lateApproved ? "Late-approved hours" : "Weekly hours"} · ${formatRange(p.periodStart, p.periodEnd)}`, href: `/payroll/records/${p.id}` } : { text: "Payroll record" };
+    return p ? { text: `${p.lateApproved ? "Late-approved hours" : "Weekly hours"} · ${formatRange(p.periodStart, p.periodEnd)}`, href: routes.payrollRecord(p.id) } : { text: "Payroll record" };
   }
   const adj = data.adjustments.find((x) => x.id === a.obligation.id);
   return { text: adj?.description ?? "Record" };

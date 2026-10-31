@@ -1,5 +1,6 @@
 "use client";
 
+import { routes } from "@/lib/routes";
 import { AlertTriangle, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
@@ -255,7 +256,7 @@ function ObligationRow({
   const payable = isPayable(o);
   const name = contractor?.name ?? "Unknown contractor";
   const checkId = `sel-${o.uid}`;
-  const reviewHref = o.draftKey ? `/payroll/draft/${encodeURIComponent(o.draftKey)}` : o.kind === "payroll" && o.ref ? `/payroll/records/${o.ref.id}` : null;
+  const reviewHref = o.draftKey ? routes.payrollReview(o.draftKey) : o.kind === "payroll" && o.ref ? routes.payrollRecord(o.ref.id) : null;
 
   return (
     <li className="flex gap-3 p-4">

@@ -3,6 +3,6 @@ import { ContractorProfileRoute } from "@/components/contractors/contractor-prof
 
 export const metadata: Metadata = { title: "Contractor" };
 
-export default function Page({ params }: { params: Promise<{ id: string }> }) {
-  return <ContractorProfileRoute params={params} />;
+export default function Page() {
+  return <ContractorProfileRoute />;
 }

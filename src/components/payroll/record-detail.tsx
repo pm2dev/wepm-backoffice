@@ -1,6 +1,7 @@
 "use client";
 
-import { use, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -108,7 +109,7 @@ export function RecordDetailPage({ payrollId }: { payrollId: string }) {
   );
 }
 
-export function RecordDetailRoute({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
-  return <RecordDetailPage payrollId={id} />;
+export function RecordDetailRoute() {
+  const value = useSearchParams().get("id") ?? "";
+  return <RecordDetailPage payrollId={value} />;
 }

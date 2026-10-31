@@ -1,8 +1,10 @@
 "use client";
 
+import { routes } from "@/lib/routes";
 import { Info, Pencil, Upload } from "lucide-react";
 import Link from "next/link";
-import { use, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -21,9 +23,9 @@ import { cn } from "@/lib/utils";
 import { AddRateDialog } from "./add-rate-dialog";
 import { ContractorForm } from "./contractor-form";
 
-export function ContractorProfileRoute({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
-  return <ContractorProfilePage contractorId={id} />;
+export function ContractorProfileRoute() {
+  const value = useSearchParams().get("id") ?? "";
+  return <ContractorProfilePage contractorId={value} />;
 }
 
 const SOURCE_LABEL: Record<TimeEntry["source"], string> = { wepm: "wepm.app", harvest_import: "Harvest import", workbook_import: "Workbook import" };
@@ -194,7 +196,7 @@ function HoursSection({ data, contractor }: { data: BackofficeData; contractor: 
           title="Hours"
           action={
             <Link
-              href={`/contractors/${contractor.id}/import`}
+              href={routes.contractorImport(contractor.id)}
               className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 text-sm font-medium text-slate-900 hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-blue-600 pointer-fine:min-h-9"
             >
               <Upload className="size-4" aria-hidden />
