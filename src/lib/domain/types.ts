@@ -279,6 +279,8 @@ export type QuickBooksInvoice = {
   /** Open balance as reported by QuickBooks. */
   balanceCents: Cents;
   lastSyncedOn: ISODate;
+  /** QuickBooks MetaData.LastUpdatedTime of the stored version (older deliveries are ignored). */
+  qbLastUpdated?: string;
   /** Owner marked it paid/settled in Backoffice (e.g. QuickBooks not updated yet). */
   manuallyPaid?: ManualMark;
   /** Prototype-only records are labeled as such. */
@@ -298,6 +300,8 @@ export type InvoiceReceipt = {
   invoiceRef?: string;
   appliedTo?: PaymentApplication[];
   unappliedCents?: Cents;
+  /** QuickBooks MetaData.LastUpdatedTime of the stored version. */
+  qbLastUpdated?: string;
   /** QuickBooks Payment.PaymentRefNum (check #, ACH reference…). */
   paymentRef?: string;
   amountCents: Cents;

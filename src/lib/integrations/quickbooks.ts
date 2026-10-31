@@ -2,9 +2,9 @@
  * QuickBooks Online → Backoffice mapping.
  *
  * Shapes follow QuickBooks Online's Invoice and Payment entities (Accounting
- * API). Slashbin is expected to deliver these objects; its exact envelope,
- * authentication and retry behavior are NOT yet verified (PRD §19.1, §19.8),
- * so this file is the single place to adapt once the Slashbin contract is known.
+ * API). Slashbin is a webhook gateway: it relays QuickBooks change notices
+ * (see quickbooks-webhooks.ts), and the full entities are then fetched from the
+ * Accounting API and mapped here.
  */
 import type { ISODate } from "@/lib/domain/dates";
 import { isISODate } from "@/lib/domain/dates";
@@ -19,6 +19,7 @@ export type QboInvoice = {
   TotalAmt: number;
   Balance: number;
   CustomerRef: { value: string; name?: string };
+  MetaData?: { LastUpdatedTime?: string };
   /** Present on deleted entities in change-data-capture feeds. */
   status?: "Deleted";
 };
@@ -32,6 +33,7 @@ export type QboPayment = {
   PaymentRefNum?: string;
   CustomerRef: { value: string; name?: string };
   Line?: { Amount: number; LinkedTxn?: { TxnId: string; TxnType: string }[] }[];
+  MetaData?: { LastUpdatedTime?: string };
   status?: "Deleted";
 };
 
@@ -59,6 +61,7 @@ export type MappedInvoice = {
   dueDate?: ISODate;
   totalCents: Cents;
   balanceCents: Cents;
+  qbLastUpdated?: string;
 };
 
 export function mapInvoice(raw: QboInvoice): MappedInvoice {
@@ -71,6 +74,7 @@ export function mapInvoice(raw: QboInvoice): MappedInvoice {
     dueDate: raw.DueDate ? date(raw.DueDate, "DueDate") : undefined,
     totalCents: qboAmountToCents(raw.TotalAmt),
     balanceCents: qboAmountToCents(raw.Balance),
+    qbLastUpdated: raw.MetaData?.LastUpdatedTime,
   };
 }
 
@@ -82,6 +86,7 @@ export type MappedPayment = {
   unappliedCents: Cents;
   paymentRef?: string;
   appliedTo: { qbInvoiceId: string; amountCents: Cents }[];
+  qbLastUpdated?: string;
 };
 
 export function mapPayment(raw: QboPayment): MappedPayment {
@@ -97,5 +102,6 @@ export function mapPayment(raw: QboPayment): MappedPayment {
     unappliedCents: qboAmountToCents(raw.UnappliedAmt ?? 0),
     paymentRef: raw.PaymentRefNum || undefined,
     appliedTo,
+    qbLastUpdated: raw.MetaData?.LastUpdatedTime,
   };
 }

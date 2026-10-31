@@ -6,6 +6,8 @@ import type { BackofficeData, InvoiceReceipt, QuickBooksInvoice } from "./types"
 
 export type SyncResult = {
   data: BackofficeData;
+  /** Deliveries older than what's stored (gateway retries can arrive out of order). */
+  stale: number;
   invoicesAdded: number;
   invoicesUpdated: number;
   paymentsAdded: number;
@@ -31,7 +33,8 @@ export function syncQuickBooks(
   const rejected: SyncResult["rejected"] = [];
   let invoices = [...data.quickbooksInvoices];
   let receipts = [...data.invoiceReceipts];
-  let invoicesAdded = 0, invoicesUpdated = 0, paymentsAdded = 0, paymentsUpdated = 0;
+  let invoicesAdded = 0, invoicesUpdated = 0, paymentsAdded = 0, paymentsUpdated = 0, stale = 0;
+  const isOlder = (incoming?: string, stored?: string) => !!incoming && !!stored && Date.parse(incoming) < Date.parse(stored);
 
   for (const raw of batch.invoices ?? []) {
     if (raw.status === "Deleted") {
@@ -43,6 +46,10 @@ export function syncQuickBooks(
       const m = mapInvoice(raw);
       const existing = invoices.find((i) => i.qbInvoiceId === m.qbInvoiceId);
       const fields = { ...m, customerId: customerByQb.get(m.qbCustomerId) ?? null, lastSyncedOn: today };
+      if (existing && isOlder(m.qbLastUpdated, existing.qbLastUpdated)) {
+        stale++;
+        continue;
+      }
       if (existing) {
         invoices = invoices.map((i) => (i.id === existing.id ? { ...existing, ...fields } : i));
         invoicesUpdated++;
@@ -73,8 +80,13 @@ export function syncQuickBooks(
         paymentRef: m.paymentRef,
         appliedTo: m.appliedTo,
         invoiceRef: m.appliedTo.map((a) => docNumber(a.qbInvoiceId)).join(", ") || undefined,
+        qbLastUpdated: m.qbLastUpdated,
       };
       const existing = receipts.find((r) => r.externalPaymentId === m.externalPaymentId);
+      if (existing && isOlder(m.qbLastUpdated, existing.qbLastUpdated)) {
+        stale++;
+        continue;
+      }
       if (existing) {
         receipts = receipts.map((r) => (r.id === existing.id ? { ...existing, ...fields } : r));
         paymentsUpdated++;
@@ -87,7 +99,7 @@ export function syncQuickBooks(
     }
   }
 
-  return { data: { ...data, quickbooksInvoices: invoices, invoiceReceipts: receipts }, invoicesAdded, invoicesUpdated, paymentsAdded, paymentsUpdated, rejected };
+  return { data: { ...data, quickbooksInvoices: invoices, invoiceReceipts: receipts }, stale, invoicesAdded, invoicesUpdated, paymentsAdded, paymentsUpdated, rejected };
 }
 
 // ---------------------------------------------------------------------------
