@@ -1,4 +1,5 @@
 import * as billing from "@/lib/domain/billing";
+import { recordInvoiceReceipt } from "@/lib/domain/cashflow";
 import * as contractors from "@/lib/domain/contractors";
 import * as expenses from "@/lib/domain/expenses";
 import { commitImport } from "@/lib/domain/history-import";
@@ -8,7 +9,7 @@ import type { BackofficeRepository } from "./repository";
 import { buildSampleData } from "./sample-fixtures";
 
 /** Separate namespace so demo storage can never be mistaken for real data. */
-const STORAGE_KEY = "backoffice.sample-data.v4";
+const STORAGE_KEY = "backoffice.sample-data.v5";
 
 /**
  * Frontend-prototype repository: sample data persisted in localStorage.
@@ -24,7 +25,7 @@ export class SampleRepository implements BackofficeRepository {
     if (raw) {
       try {
         const parsed = JSON.parse(raw) as BackofficeData;
-        if (parsed.schemaVersion === 4) return (this.data = parsed);
+        if (parsed.schemaVersion === 5) return (this.data = parsed);
       } catch {
         /* fall through to fresh sample data */
       }
@@ -143,6 +144,12 @@ export class SampleRepository implements BackofficeRepository {
 
   async removeBillingRecord(id: string) {
     this.commit(billing.removeBillingRecord(await this.load(), id));
+  }
+
+  async recordInvoiceReceipt(input: Parameters<BackofficeRepository["recordInvoiceReceipt"]>[0]) {
+    const r = recordInvoiceReceipt(await this.load(), input);
+    this.commit(r.data);
+    return { receipt: r.receipt, duplicate: r.duplicate };
   }
 
   resetDemo = async () => this.commit(buildSampleData());

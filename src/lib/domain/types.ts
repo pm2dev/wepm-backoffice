@@ -261,8 +261,22 @@ export type ExpenseCharge = {
   paidOn?: ISODate;
 };
 
+/** A customer invoice payment received in QuickBooks (delivered via Slashbin). */
+export type InvoiceReceipt = {
+  id: string;
+  /** QuickBooks payment identity — dedupe key. */
+  externalPaymentId: string;
+  customerId: string | null;
+  quickbooksCustomerId?: string;
+  invoiceRef?: string;
+  amountCents: Cents;
+  receivedOn: ISODate;
+  /** Prototype-only receipts entered by hand are labeled as such. */
+  simulated?: boolean;
+};
+
 export type BackofficeData = {
-  schemaVersion: 4;
+  schemaVersion: 5;
   contractors: Contractor[];
   rates: ContractorRate[];
   projects: Project[];
@@ -277,4 +291,5 @@ export type BackofficeData = {
   expenseCharges: ExpenseCharge[];
   customers: Customer[];
   billingRecords: BillingRecord[];
+  invoiceReceipts: InvoiceReceipt[];
 };

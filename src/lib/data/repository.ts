@@ -4,7 +4,7 @@ import type { RecordPaymentInput } from "@/lib/domain/payroll";
 import type { CustomerInput, ProjectInput } from "@/lib/domain/billing";
 import type { ContractorInput } from "@/lib/domain/contractors";
 import type { ExpenseInput } from "@/lib/domain/expenses";
-import type { Adjustment, AdjustmentKind, BackofficeData, Contractor, ContractorRate, FinalizedPayroll, ImportBatch, BillingRecord, Customer, PaymentAccount, PaymentRecord, Project, RecurringExpense } from "@/lib/domain/types";
+import type { Adjustment, AdjustmentKind, BackofficeData, Contractor, ContractorRate, FinalizedPayroll, ImportBatch, BillingRecord, Customer, InvoiceReceipt, PaymentAccount, PaymentRecord, Project, RecurringExpense } from "@/lib/domain/types";
 
 /**
  * Data-access boundary. Pages talk only to this interface. During frontend
@@ -45,6 +45,13 @@ export interface BackofficeRepository {
   /** After creating the invoice in QuickBooks: mark the project's uninvoiced hours invoiced. */
   markInvoiced(input: { projectId: string; through?: ISODate; invoicedOn: ISODate; quickbooksInvoiceRef?: string }): Promise<BillingRecord>;
   removeBillingRecord(id: string): Promise<void>;
+  // Cash flow
+  /**
+   * Store an invoice payment. In production these arrive from QuickBooks via
+   * Slashbin; the prototype also uses it for clearly labeled simulated payments.
+   * Duplicate payment IDs are ignored.
+   */
+  recordInvoiceReceipt(input: Omit<InvoiceReceipt, "id">): Promise<{ receipt: InvoiceReceipt; duplicate: boolean }>;
   /** Only available for sample data. Never present on a live repository. */
   resetDemo?: () => Promise<BackofficeData>;
 }

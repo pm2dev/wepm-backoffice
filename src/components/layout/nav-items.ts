@@ -10,7 +10,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/bills", label: "Bills & subscriptions", icon: Receipt, ready: true },
   { href: "/customers", label: "Customers", icon: Building2, ready: true },
   { href: "/projects", label: "Projects & billing", icon: Briefcase, ready: true },
-  { href: "/cash-flow", label: "Cash flow", icon: CalendarClock, ready: false },
+  { href: "/cash-flow", label: "Cash flow", icon: CalendarClock, ready: true },
   { href: "/settings", label: "Settings", icon: Settings, ready: false },
 ];
 

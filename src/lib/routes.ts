@@ -19,4 +19,6 @@ export const routes = {
   projectList: "/projects/list",
   invoiced: "/projects/invoiced",
   project: (id: string) => q("/projects/profile", { id }),
+  cashFlow: "/cash-flow",
+  receipt: (id: string) => q("/cash-flow/receipt", { id }),
 };

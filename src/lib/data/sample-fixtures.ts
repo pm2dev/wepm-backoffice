@@ -5,6 +5,7 @@
  * records and payments are internally consistent.
  */
 import { markInvoiced } from "@/lib/domain/billing";
+import { recordInvoiceReceipt } from "@/lib/domain/cashflow";
 import { listCharges, setChargeAmount, setChargesPaid } from "@/lib/domain/expenses";
 import { finalizePayroll, recordPayment, draftKey, addAdjustment, type IdFactory } from "@/lib/domain/payroll";
 import type { BackofficeData, TimeEntry, TimeException } from "@/lib/domain/types";
@@ -51,7 +52,7 @@ function entries(
 export function buildSampleData(): BackofficeData {
   const id = sequentialIds();
   let data: BackofficeData = {
-    schemaVersion: 4,
+    schemaVersion: 5,
     contractors: [
       {
         id: "c_maya",
@@ -119,6 +120,7 @@ export function buildSampleData(): BackofficeData {
       { id: "p_internal", name: "Internal operations", customerId: null, billable: false, billingMethod: "hourly", taskRates: {}, wepmProjectId: "wepm_p_200", active: true },
     ],
     billingRecords: [],
+    invoiceReceipts: [],
     timeEntries: [
       // Maya — Oct 5–11 and Oct 12–18 (finalized below), Oct 19–25 crosses her Oct 21 raise
       ...entries("c_maya", "wepm_ts_m1005", "2026-10-12", [
@@ -272,6 +274,11 @@ export function buildSampleData(): BackofficeData {
   // Billing: the first October week was invoiced in QuickBooks and marked here.
   data = markInvoiced(data, { projectId: "p_acme", through: "2026-10-11", invoicedOn: "2026-10-12", quickbooksInvoiceRef: "INV-2026-031" }, id).data;
   data = markInvoiced(data, { projectId: "p_northwind", through: "2026-10-11", invoicedOn: "2026-10-12", quickbooksInvoiceRef: "INV-2026-032" }, id).data;
+
+  // Cash flow: QuickBooks payments received for those invoices.
+  const inv = (ref: string) => data.billingRecords.find((r) => r.quickbooksInvoiceRef === ref)!;
+  data = recordInvoiceReceipt(data, { externalPaymentId: "qbo-pmt-5521", customerId: "cust_northwind", quickbooksCustomerId: "QB-1077", invoiceRef: "INV-2026-032", amountCents: inv("INV-2026-032").amountCents, receivedOn: "2026-10-27" }, id).data;
+  data = recordInvoiceReceipt(data, { externalPaymentId: "qbo-pmt-5538", customerId: "cust_acme", quickbooksCustomerId: "QB-1042", invoiceRef: "INV-2026-031", amountCents: 150000, receivedOn: "2026-10-30" }, id).data;
 
   return data;
 }
