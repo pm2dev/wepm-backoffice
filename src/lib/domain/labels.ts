@@ -5,5 +5,6 @@ export function assignmentLabel(data: BackofficeData, projectId: string | null):
   if (!projectId) return "Company";
   const p = data.projects.find((x) => x.id === projectId);
   if (!p) return "Unknown project";
-  return p.customerName ? `${p.customerName} · ${p.name}` : p.name;
+  const customer = p.customerId ? data.customers.find((c) => c.id === p.customerId)?.name : undefined;
+  return customer ? `${customer} · ${p.name}` : p.name;
 }

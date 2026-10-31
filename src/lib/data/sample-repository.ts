@@ -1,3 +1,4 @@
+import * as billing from "@/lib/domain/billing";
 import * as contractors from "@/lib/domain/contractors";
 import * as expenses from "@/lib/domain/expenses";
 import { commitImport } from "@/lib/domain/history-import";
@@ -7,7 +8,7 @@ import type { BackofficeRepository } from "./repository";
 import { buildSampleData } from "./sample-fixtures";
 
 /** Separate namespace so demo storage can never be mistaken for real data. */
-const STORAGE_KEY = "backoffice.sample-data.v3";
+const STORAGE_KEY = "backoffice.sample-data.v4";
 
 /**
  * Frontend-prototype repository: sample data persisted in localStorage.
@@ -23,7 +24,7 @@ export class SampleRepository implements BackofficeRepository {
     if (raw) {
       try {
         const parsed = JSON.parse(raw) as BackofficeData;
-        if (parsed.schemaVersion === 3) return (this.data = parsed);
+        if (parsed.schemaVersion === 4) return (this.data = parsed);
       } catch {
         /* fall through to fresh sample data */
       }
@@ -55,15 +56,16 @@ export class SampleRepository implements BackofficeRepository {
     return r.adjustment;
   }
 
-  async addContractor(input: Parameters<BackofficeRepository["addContractor"]>[0]) {
+  // Adding a wepm.app person ID can resolve held-back time entries.
+  async addContractor(input: Parameters<BackofficeRepository["addContractor"]>[0], today: string) {
     const r = contractors.addContractor(await this.load(), input);
-    this.commit(r.data);
+    this.commit(billing.reprocessExceptions(r.data, today).data);
     return r.contractor;
   }
 
-  async updateContractor(id: string, input: contractors.ContractorInput) {
+  async updateContractor(id: string, input: contractors.ContractorInput, today: string) {
     const r = contractors.updateContractor(await this.load(), id, input);
-    this.commit(r.data);
+    this.commit(billing.reprocessExceptions(r.data, today).data);
     return r.contractor;
   }
 
@@ -107,6 +109,40 @@ export class SampleRepository implements BackofficeRepository {
 
   async setChargeAmount(key: string, amountCents: number) {
     this.commit(expenses.setChargeAmount(await this.load(), key, amountCents));
+  }
+
+  async addCustomer(input: billing.CustomerInput) {
+    const r = billing.addCustomer(await this.load(), input);
+    this.commit(r.data);
+    return r.customer;
+  }
+
+  async updateCustomer(id: string, input: billing.CustomerInput) {
+    const r = billing.updateCustomer(await this.load(), id, input);
+    this.commit(r.data);
+    return r.customer;
+  }
+
+  async addProject(input: billing.ProjectInput, today: string) {
+    const r = billing.addProject(await this.load(), input, today);
+    this.commit(r.data);
+    return r.project;
+  }
+
+  async updateProject(id: string, input: billing.ProjectInput, today: string) {
+    const r = billing.updateProject(await this.load(), id, input, today);
+    this.commit(r.data);
+    return r.project;
+  }
+
+  async markInvoiced(input: Parameters<BackofficeRepository["markInvoiced"]>[0]) {
+    const r = billing.markInvoiced(await this.load(), input);
+    this.commit(r.data);
+    return r.record;
+  }
+
+  async removeBillingRecord(id: string) {
+    this.commit(billing.removeBillingRecord(await this.load(), id));
   }
 
   resetDemo = async () => this.commit(buildSampleData());

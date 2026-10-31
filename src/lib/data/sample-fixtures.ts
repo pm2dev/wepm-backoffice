@@ -4,6 +4,7 @@
  * production data. Built through the real domain functions so finalized
  * records and payments are internally consistent.
  */
+import { markInvoiced } from "@/lib/domain/billing";
 import { listCharges, setChargeAmount, setChargesPaid } from "@/lib/domain/expenses";
 import { finalizePayroll, recordPayment, draftKey, addAdjustment, type IdFactory } from "@/lib/domain/payroll";
 import type { BackofficeData, TimeEntry, TimeException } from "@/lib/domain/types";
@@ -50,7 +51,7 @@ function entries(
 export function buildSampleData(): BackofficeData {
   const id = sequentialIds();
   let data: BackofficeData = {
-    schemaVersion: 3,
+    schemaVersion: 4,
     contractors: [
       {
         id: "c_maya",
@@ -102,11 +103,22 @@ export function buildSampleData(): BackofficeData {
       { id: "rate_sam_1", contractorId: "c_sam", effectiveDate: "2024-01-01", hourlyRateCents: 3000 },
       // Priya intentionally has no rate yet — demonstrates the missing-rate state.
     ],
-    projects: [
-      { id: "p_acme", name: "Member portal", customerName: "Acme Corp (sample)", billable: true, wepmProjectId: "wepm_p_201" },
-      { id: "p_northwind", name: "Data migration", customerName: "Northwind (sample)", billable: true, wepmProjectId: "wepm_p_202" },
-      { id: "p_internal", name: "Internal operations", billable: false, wepmProjectId: "wepm_p_200" },
+    customers: [
+      { id: "cust_acme", name: "Acme Corp (sample)", billingCadence: "monthly", quickbooksCustomerId: "QB-1042", notes: "Invoices go to accounts payable; net 15." },
+      { id: "cust_northwind", name: "Northwind (sample)", billingCadence: "biweekly", quickbooksCustomerId: "QB-1077" },
     ],
+    projects: [
+      {
+        id: "p_acme", name: "Member portal", customerId: "cust_acme", billable: true, billingMethod: "task",
+        // Design intentionally has no rate yet — demonstrates the missing-task-rate state.
+        taskRates: { Development: 12500, Meetings: 7500 },
+        wepmProjectId: "wepm_p_201", active: true,
+      },
+      { id: "p_northwind", name: "Data migration", customerId: "cust_northwind", billable: true, billingMethod: "hourly", hourlyRateCents: 14000, taskRates: {}, wepmProjectId: "wepm_p_202", active: true },
+      { id: "p_northwind_disc", name: "Discovery", customerId: "cust_northwind", billable: true, billingMethod: "hourly", hourlyRateCents: 15000, taskRates: {}, billingCadence: "monthly", active: true },
+      { id: "p_internal", name: "Internal operations", customerId: null, billable: false, billingMethod: "hourly", taskRates: {}, wepmProjectId: "wepm_p_200", active: true },
+    ],
+    billingRecords: [],
     timeEntries: [
       // Maya — Oct 5–11 and Oct 12–18 (finalized below), Oct 19–25 crosses her Oct 21 raise
       ...entries("c_maya", "wepm_ts_m1005", "2026-10-12", [
@@ -256,6 +268,10 @@ export function buildSampleData(): BackofficeData {
     receivedOn: "2026-10-27",
   };
   data = { ...data, timeExceptions: [exception] };
+
+  // Billing: the first October week was invoiced in QuickBooks and marked here.
+  data = markInvoiced(data, { projectId: "p_acme", through: "2026-10-11", invoicedOn: "2026-10-12", quickbooksInvoiceRef: "INV-2026-031" }, id).data;
+  data = markInvoiced(data, { projectId: "p_northwind", through: "2026-10-11", invoicedOn: "2026-10-12", quickbooksInvoiceRef: "INV-2026-032" }, id).data;
 
   return data;
 }

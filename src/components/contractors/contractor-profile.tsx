@@ -331,7 +331,7 @@ function PaymentsSection({ data, contractor }: { data: BackofficeData; contracto
 
 function EditContractorDialog({ contractor }: { contractor: Contractor }) {
   const [open, setOpen] = useState(false);
-  const { mutate } = useBackoffice();
+  const { mutate, today } = useBackoffice();
   const notify = useNotice();
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -347,7 +347,7 @@ function EditContractorDialog({ contractor }: { contractor: Contractor }) {
             contractor={contractor}
             submitLabel="Save changes"
             onSubmit={async (input) => {
-              const c = await mutate((r) => r.updateContractor(contractor.id, input));
+              const c = await mutate((r) => r.updateContractor(contractor.id, input, today));
               notify(`${c.name}'s profile saved.`);
               setOpen(false);
             }}

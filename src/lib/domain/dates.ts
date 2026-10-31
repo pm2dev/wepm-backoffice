@@ -71,6 +71,7 @@ export function formatDate(date: ISODate, opts: { weekday?: boolean; year?: bool
 }
 
 export function formatRange(start: ISODate, end: ISODate): string {
+  if (start === end) return formatDate(start);
   const s = toUTC(start);
   const e = toUTC(end);
   if (s.getUTCFullYear() !== e.getUTCFullYear()) {

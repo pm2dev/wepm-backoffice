@@ -28,7 +28,7 @@ export function EntriesTable({ data, entries, contractorId, caption }: { data: B
                 <td className="whitespace-nowrap px-4 py-2.5">{formatDate(e.workDate, { weekday: true, year: false })}</td>
                 <td className="px-4 py-2.5">
                   {p ? p.name : (e.sourceProject ?? "Unknown project")}
-                  {p?.customerName ? <span className="text-slate-500"> ({p.customerName})</span> : null}
+                  {p?.customerId ? <span className="text-slate-500"> ({data.customers.find((c) => c.id === p.customerId)?.name})</span> : null}
                   {p && !p.billable ? <span className="text-slate-500"> · nonbillable</span> : null}
                   <span className="text-slate-600"> · {e.task}</span>
                 </td>

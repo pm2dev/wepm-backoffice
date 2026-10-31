@@ -97,7 +97,7 @@ export function ContractorsListPage() {
 
 function AddContractorDialog() {
   const [open, setOpen] = useState(false);
-  const { mutate } = useBackoffice();
+  const { mutate, today } = useBackoffice();
   const notify = useNotice();
   const router = useRouter();
   return (
@@ -113,7 +113,7 @@ function AddContractorDialog() {
           <ContractorForm
             submitLabel="Add contractor"
             onSubmit={async (input) => {
-              const c = await mutate((r) => r.addContractor(input));
+              const c = await mutate((r) => r.addContractor(input, today));
               notify(`${c.name} added.`);
               setOpen(false);
               router.push(routes.contractor(c.id));

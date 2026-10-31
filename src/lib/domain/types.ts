@@ -44,12 +44,51 @@ export type ContractorRate = {
   hourlyRateCents: Cents;
 };
 
+export type BillingCadence = "weekly" | "biweekly" | "semimonthly" | "monthly";
+
+/** Manually maintained customer (PRD §10). */
+export type Customer = {
+  id: string;
+  name: string;
+  /** Default billing cadence; a project may override it. Informational for now (PRD §19.5). */
+  billingCadence: BillingCadence;
+  /** QuickBooks customer identity, for the Slashbin mapping. */
+  quickbooksCustomerId?: string;
+  notes?: string;
+};
+
 export type Project = {
   id: string;
   name: string;
-  customerName?: string;
+  /** null = internal project owned by the business. */
+  customerId: string | null;
+  /** One setting per project. Nonbillable time is still paid to contractors. */
   billable: boolean;
+  /** "hourly" = one flat rate; "task" = a rate per task. */
+  billingMethod: "hourly" | "task";
+  hourlyRateCents?: Cents;
+  /** Task name → billing rate (task method). */
+  taskRates: Record<string, Cents>;
+  billingCadence?: BillingCadence;
   wepmProjectId?: string;
+  active: boolean;
+};
+
+/** A billing line preserved when hours are marked invoiced. */
+export type BillingLine = { task: string; minutes: number; rateCents: Cents; amountCents: Cents };
+
+/** Hours the owner marked invoiced after creating the invoice in QuickBooks. */
+export type BillingRecord = {
+  id: string;
+  projectId: string;
+  customerId: string;
+  entryIds: string[];
+  firstWorkDate: ISODate;
+  lastWorkDate: ISODate;
+  lines: BillingLine[];
+  amountCents: Cents;
+  invoicedOn: ISODate;
+  quickbooksInvoiceRef?: string;
 };
 
 export type TimeEntrySource = "wepm" | "harvest_import" | "workbook_import";
@@ -223,7 +262,7 @@ export type ExpenseCharge = {
 };
 
 export type BackofficeData = {
-  schemaVersion: 3;
+  schemaVersion: 4;
   contractors: Contractor[];
   rates: ContractorRate[];
   projects: Project[];
@@ -236,4 +275,6 @@ export type BackofficeData = {
   paymentAccounts: PaymentAccount[];
   expenses: RecurringExpense[];
   expenseCharges: ExpenseCharge[];
+  customers: Customer[];
+  billingRecords: BillingRecord[];
 };

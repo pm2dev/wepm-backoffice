@@ -13,4 +13,10 @@ export const routes = {
   contractors: "/contractors",
   contractor: (id: string, hash?: string) => q("/contractors/profile", { id }) + (hash ? `#${hash}` : ""),
   contractorImport: (id: string) => q("/contractors/import", { id }),
+  customers: "/customers",
+  customer: (id: string) => q("/customers/profile", { id }),
+  billing: "/projects",
+  projectList: "/projects/list",
+  invoiced: "/projects/invoiced",
+  project: (id: string) => q("/projects/profile", { id }),
 };
