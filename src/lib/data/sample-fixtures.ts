@@ -4,6 +4,7 @@
  * production data. Built through the real domain functions so finalized
  * records and payments are internally consistent.
  */
+import { listCharges, setChargeAmount, setChargesPaid } from "@/lib/domain/expenses";
 import { finalizePayroll, recordPayment, draftKey, addAdjustment, type IdFactory } from "@/lib/domain/payroll";
 import type { BackofficeData, TimeEntry, TimeException } from "@/lib/domain/types";
 
@@ -49,7 +50,7 @@ function entries(
 export function buildSampleData(): BackofficeData {
   const id = sequentialIds();
   let data: BackofficeData = {
-    schemaVersion: 2,
+    schemaVersion: 3,
     contractors: [
       {
         id: "c_maya",
@@ -173,7 +174,36 @@ export function buildSampleData(): BackofficeData {
       { id: "harvest_2025_03", contractorId: "c_maya", fileName: "maya-harvest-2025-03.csv", format: "harvest", importedOn: "2026-10-10", rowCount: 2, importedCount: 2, skippedInvalid: 0, skippedDuplicates: 0, importedMinutes: 13 * 60, firstWorkDate: "2025-03-04", lastWorkDate: "2025-03-05" },
       { id: "harvest_2026_08", contractorId: "c_sam", fileName: "sam-harvest-aug-2026.csv", format: "harvest", importedOn: "2026-10-10", rowCount: 2, importedCount: 2, skippedInvalid: 0, skippedDuplicates: 0, importedMinutes: 16 * 60, firstWorkDate: "2026-08-24", lastWorkDate: "2026-08-25" },
     ],
+    paymentAccounts: [
+      { id: "acct_chase", kind: "card", nickname: "Chase business card", last4: "1234" },
+      { id: "acct_amex", kind: "card", nickname: "Amex Blue Business", last4: "3005" },
+      { id: "acct_checking", kind: "bank", nickname: "Business checking" },
+    ],
+    expenses: [
+      { id: "exp_gws", vendor: "Google Workspace", type: "subscription", projectId: null, frequency: "monthly", firstDueDate: "2026-05-05", amountKind: "fixed", amountCents: 3600, autopay: true, accountId: "acct_chase", createdOn: "2026-05-01" },
+      { id: "exp_figma", vendor: "Figma", type: "subscription", projectId: "p_acme", frequency: "monthly", firstDueDate: "2026-06-12", amountKind: "fixed", amountCents: 4500, autopay: true, accountId: "acct_chase", notes: "Two editor seats for the member portal.", createdOn: "2026-06-10" },
+      { id: "exp_adobe", vendor: "Adobe Creative Cloud", type: "subscription", projectId: null, frequency: "annual", firstDueDate: "2025-11-20", amountKind: "fixed", amountCents: 65988, autopay: true, accountId: "acct_amex", createdOn: "2025-11-01" },
+      { id: "exp_aws", vendor: "AWS", type: "bill", projectId: "p_northwind", frequency: "monthly", firstDueDate: "2026-06-03", amountKind: "variable", amountCents: 12000, autopay: true, accountId: "acct_amex", notes: "Usage-based; estimate is a recent average.", createdOn: "2026-06-01" },
+      { id: "exp_internet", vendor: "Office internet", type: "bill", projectId: null, frequency: "monthly", firstDueDate: "2026-06-15", amountKind: "variable", amountCents: 8500, autopay: false, accountId: "acct_checking", createdOn: "2026-06-01" },
+      { id: "exp_insurance", vendor: "Business liability insurance", type: "bill", projectId: null, frequency: "quarterly", firstDueDate: "2026-01-10", amountKind: "fixed", amountCents: 31000, autopay: false, accountId: "acct_checking", createdOn: "2026-01-02" },
+      { id: "exp_domain", vendor: "wepmlabs.com renewal", type: "bill", projectId: null, frequency: "one_time", firstDueDate: "2026-11-08", amountKind: "fixed", amountCents: 1999, autopay: false, accountId: "acct_chase", createdOn: "2026-10-01" },
+      { id: "exp_notion", vendor: "Notion", type: "subscription", projectId: null, frequency: "monthly", firstDueDate: "2026-05-20", endDate: "2026-09-30", amountKind: "fixed", amountCents: 2000, autopay: true, accountId: "acct_chase", notes: "Cancelled in September.", createdOn: "2026-05-15" },
+    ],
+    expenseCharges: [],
   };
+
+  // Bills: everything through September verified paid, plus some October items.
+  const actuals: [string, number][] = [
+    ["exp_aws~2026-06-03", 11842], ["exp_aws~2026-07-03", 12510], ["exp_aws~2026-08-03", 11977], ["exp_aws~2026-09-03", 12230], ["exp_aws~2026-10-03", 13142],
+    ["exp_internet~2026-06-15", 8499], ["exp_internet~2026-07-15", 8499], ["exp_internet~2026-08-15", 8499], ["exp_internet~2026-10-15", 9120],
+  ];
+  for (const [key, cents] of actuals) data = setChargeAmount(data, key, cents, id);
+  for (const c of listCharges(data, "2026-09-30")) {
+    if (c.key === "exp_internet~2026-09-15") continue; // September internet still unpaid → carryover
+    data = setChargesPaid(data, [c.key], c.dueDate, id);
+  }
+  data = setChargesPaid(data, ["exp_figma~2026-10-12", "exp_aws~2026-10-03", "exp_insurance~2026-10-10"], "2026-10-28", id);
+  // Google Workspace (autopay) for October is intentionally left unconfirmed.
 
   // Finalize and pay earlier weeks as they would have happened.
   const fin = (contractorId: string, start: string, on: string) => {

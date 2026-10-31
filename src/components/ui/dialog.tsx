@@ -2,7 +2,7 @@
 
 import * as RadixDialog from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
 export const Dialog = RadixDialog.Root;
@@ -72,4 +72,18 @@ export function DialogContent({
       </RadixDialog.Content>
     </RadixDialog.Portal>
   );
+}
+
+/**
+ * For dialogs mounted when opened from code: remembers the control that had
+ * focus (Safari doesn't focus buttons on tap, so this may be null) so focus
+ * can return to it on close.
+ */
+export function useOpenerElement(): HTMLElement | null {
+  const [opener] = useState<HTMLElement | null>(() => {
+    if (typeof document === "undefined") return null;
+    const el = document.activeElement as HTMLElement | null;
+    return el && el !== document.body ? el : null;
+  });
+  return opener;
 }

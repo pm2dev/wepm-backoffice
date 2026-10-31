@@ -171,8 +171,59 @@ export type PaymentRecord = {
   recordedOn: ISODate;
 };
 
+// ---------------------------------------------------------------------------
+// Bills & subscriptions (PRD §9)
+// ---------------------------------------------------------------------------
+
+/** A card or bank account charges are paid from. Never a full card number. */
+export type PaymentAccount = {
+  id: string;
+  kind: "card" | "bank";
+  nickname: string;
+  /** Cards only, optional. */
+  last4?: string;
+};
+
+export type ExpenseFrequency = "monthly" | "quarterly" | "annual" | "one_time";
+
+export type RecurringExpense = {
+  id: string;
+  vendor: string;
+  type: "bill" | "subscription";
+  /** null = the company; otherwise exactly one project (no splitting). */
+  projectId: string | null;
+  frequency: ExpenseFrequency;
+  /** Anchor due/renewal date; later charges keep its day of month. */
+  firstDueDate: ISODate;
+  /** Charges before this date come from an earlier version of the schedule and are stored explicitly. */
+  scheduleFrom?: ISODate;
+  /** Last date a charge may fall on (stopped/cancelled). */
+  endDate?: ISODate;
+  amountKind: "fixed" | "variable";
+  /** Fixed amount, or the planning estimate for variable amounts. */
+  amountCents: Cents;
+  autopay: boolean;
+  accountId: string;
+  notes?: string;
+  createdOn: ISODate;
+};
+
+/**
+ * One occurrence of an expense, stored once something is recorded about it
+ * (paid, actual amount) or when its schedule changes. Unstored occurrences
+ * are generated from the schedule.
+ */
+export type ExpenseCharge = {
+  id: string;
+  expenseId: string;
+  dueDate: ISODate;
+  amountCents: Cents;
+  isEstimate: boolean;
+  paidOn?: ISODate;
+};
+
 export type BackofficeData = {
-  schemaVersion: 2;
+  schemaVersion: 3;
   contractors: Contractor[];
   rates: ContractorRate[];
   projects: Project[];
@@ -182,4 +233,7 @@ export type BackofficeData = {
   adjustments: Adjustment[];
   payments: PaymentRecord[];
   importBatches: ImportBatch[];
+  paymentAccounts: PaymentAccount[];
+  expenses: RecurringExpense[];
+  expenseCharges: ExpenseCharge[];
 };

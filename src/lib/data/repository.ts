@@ -2,7 +2,8 @@ import type { ISODate } from "@/lib/domain/dates";
 import type { Cents } from "@/lib/domain/money";
 import type { RecordPaymentInput } from "@/lib/domain/payroll";
 import type { ContractorInput } from "@/lib/domain/contractors";
-import type { Adjustment, AdjustmentKind, BackofficeData, Contractor, ContractorRate, FinalizedPayroll, ImportBatch, PaymentRecord } from "@/lib/domain/types";
+import type { ExpenseInput } from "@/lib/domain/expenses";
+import type { Adjustment, AdjustmentKind, BackofficeData, Contractor, ContractorRate, FinalizedPayroll, ImportBatch, PaymentAccount, PaymentRecord, RecurringExpense } from "@/lib/domain/types";
 
 /**
  * Data-access boundary. Pages talk only to this interface. During frontend
@@ -26,6 +27,15 @@ export interface BackofficeRepository {
     input: { contractorId: string; fileName: string; csvText: string; includeDuplicateLines?: number[] },
     today: ISODate,
   ): Promise<ImportBatch>;
+  // Bills & subscriptions
+  addPaymentAccount(input: { kind: PaymentAccount["kind"]; nickname: string; last4?: string }): Promise<PaymentAccount>;
+  addExpense(input: ExpenseInput, today: ISODate): Promise<RecurringExpense>;
+  updateExpense(id: string, input: ExpenseInput, today: ISODate): Promise<RecurringExpense>;
+  /** Set or clear (null) the last date an expense may charge. */
+  stopExpense(id: string, endDate: ISODate | null): Promise<void>;
+  /** Mark selected charges paid on a date, or unpaid (null). */
+  setChargesPaid(chargeKeys: string[], paidOn: ISODate | null): Promise<void>;
+  setChargeAmount(chargeKey: string, amountCents: Cents): Promise<void>;
   /** Only available for sample data. Never present on a live repository. */
   resetDemo?: () => Promise<BackofficeData>;
 }

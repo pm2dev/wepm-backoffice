@@ -1,4 +1,5 @@
 import * as contractors from "@/lib/domain/contractors";
+import * as expenses from "@/lib/domain/expenses";
 import { commitImport } from "@/lib/domain/history-import";
 import * as domain from "@/lib/domain/payroll";
 import type { BackofficeData } from "@/lib/domain/types";
@@ -6,7 +7,7 @@ import type { BackofficeRepository } from "./repository";
 import { buildSampleData } from "./sample-fixtures";
 
 /** Separate namespace so demo storage can never be mistaken for real data. */
-const STORAGE_KEY = "backoffice.sample-data.v2";
+const STORAGE_KEY = "backoffice.sample-data.v3";
 
 /**
  * Frontend-prototype repository: sample data persisted in localStorage.
@@ -22,7 +23,7 @@ export class SampleRepository implements BackofficeRepository {
     if (raw) {
       try {
         const parsed = JSON.parse(raw) as BackofficeData;
-        if (parsed.schemaVersion === 2) return (this.data = parsed);
+        if (parsed.schemaVersion === 3) return (this.data = parsed);
       } catch {
         /* fall through to fresh sample data */
       }
@@ -76,6 +77,36 @@ export class SampleRepository implements BackofficeRepository {
     const r = commitImport(await this.load(), input, today);
     this.commit(r.data);
     return r.batch;
+  }
+
+  async addPaymentAccount(input: Parameters<BackofficeRepository["addPaymentAccount"]>[0]) {
+    const r = expenses.addPaymentAccount(await this.load(), input);
+    this.commit(r.data);
+    return r.account;
+  }
+
+  async addExpense(input: expenses.ExpenseInput, today: string) {
+    const r = expenses.addExpense(await this.load(), input, today);
+    this.commit(r.data);
+    return r.expense;
+  }
+
+  async updateExpense(id: string, input: expenses.ExpenseInput, today: string) {
+    const r = expenses.updateExpense(await this.load(), id, input, today);
+    this.commit(r.data);
+    return r.expense;
+  }
+
+  async stopExpense(id: string, endDate: string | null) {
+    this.commit(expenses.stopExpense(await this.load(), id, endDate));
+  }
+
+  async setChargesPaid(keys: string[], paidOn: string | null) {
+    this.commit(expenses.setChargesPaid(await this.load(), keys, paidOn));
+  }
+
+  async setChargeAmount(key: string, amountCents: number) {
+    this.commit(expenses.setChargeAmount(await this.load(), key, amountCents));
   }
 
   resetDemo = async () => this.commit(buildSampleData());
