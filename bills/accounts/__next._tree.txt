@@ -1,5 +1,6 @@
-:HL["/wepm-backoffice/_next/static/chunks/23w5c6mma-7-c.css","style"]
-3:[["children",{"s":"__PAGE__","h":160}]]
-2:[["children",{"s":"accounts","h":96,"c":"$Q3"}]]
-1:[["children",{"s":"bills","h":96,"c":"$Q2"}]]
-0:{"b":"3MTukJ-HEO_w5lwI_D5oE","t":{"t":{"s":"","h":80,"c":"$Q1"}}}
+:HL["/wepm-backoffice/_next/static/chunks/28so54_zbwj4m.css","style"]
+4:[["children",{"s":"__PAGE__","h":160}]]
+3:[["children",{"s":"accounts","h":96,"c":"$Q4"}]]
+2:[["children",{"s":"bills","h":96,"c":"$Q3"}]]
+1:[["children",{"s":"(main)","h":96,"c":"$Q2"}]]
+0:{"b":"lAcGCBKeWSiGCvqbifSG2","t":{"t":{"s":"","h":80,"c":"$Q1"}}}
