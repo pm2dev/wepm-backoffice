@@ -3,8 +3,18 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { isISODate, localToday, type ISODate } from "@/lib/domain/dates";
 import type { BackofficeData } from "@/lib/domain/types";
+import { LiveRepository } from "./live-repository";
 import type { BackofficeRepository } from "./repository";
 import { SampleRepository } from "./sample-repository";
+
+/** Build-time configuration (inlined by Next.js). */
+export const DATA_MODE = process.env.NEXT_PUBLIC_DATA_MODE === "live" ? "live" : "sample";
+export const APP_ENV = process.env.NEXT_PUBLIC_APP_ENV === "production" ? "production" : process.env.NEXT_PUBLIC_APP_ENV === "development" ? "development" : "preview";
+
+function createRepository(): BackofficeRepository {
+  if (DATA_MODE === "live") return new LiveRepository(process.env.NEXT_PUBLIC_BASE_PATH ?? "", APP_ENV !== "production");
+  return new SampleRepository();
+}
 
 const CLOCK_KEY = "backoffice.sample-clock";
 
@@ -29,7 +39,7 @@ type Ctx = {
 const BackofficeContext = createContext<Ctx | null>(null);
 
 export function BackofficeProvider({ children }: { children: ReactNode }) {
-  const repo = useMemo<BackofficeRepository>(() => new SampleRepository(), []);
+  const repo = useMemo<BackofficeRepository>(() => createRepository(), []);
   const [state, setState] = useState<State>({ status: "loading" });
   const [clockOverride, setClockState] = useState<ISODate | null>(null);
   // Empty until mounted: the device date is only read in the browser, never during prerender.

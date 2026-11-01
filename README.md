@@ -11,6 +11,10 @@ npm test           # domain/acceptance tests (vitest)
 npm run build && npm start
 ```
 
+### Railway (development and production)
+
+The app runs as a Next.js server with PostgreSQL (Prisma 7). See **[docs/railway.md](docs/railway.md)** for step-by-step setup of the `development` and `production` environments. With `NEXT_PUBLIC_DATA_MODE=live`, every change goes to `POST /api/ops` and runs the same business rules on the server inside a database transaction. `GET /api/health` is the Railway health check.
+
 ### GitHub Pages preview (phone testing)
 
 ```bash
@@ -52,14 +56,19 @@ Detail pages use query strings instead of path segments so the app can be export
 
 ```
 src/lib/domain/     pure business rules (dates, money, rates, schedule, payroll, ingestion) + tests
-src/lib/data/       repository interface, sample-data adapter (localStorage), fixtures, React provider/clock
+src/lib/data/       operations (every change, shared by browser and server), repositories (sample/localStorage, live/API), fixtures, provider/clock
+src/server/         Prisma client and the Postgres-backed store (server-only)
+src/app/api/        /api/data, /api/ops, /api/health
+prisma/             schema and migrations
 src/components/ui/  shared primitives (button, badge, dialog, fields, states)
 src/components/layout/  app shell, navigation, sample banner, notices
 src/components/<module>/  pages and dialogs per module (payroll, contractors, bills, customers, projects, cashflow)
 src/app/            routes only
 ```
 
-Pages talk only to `BackofficeRepository`. A live implementation backed by authenticated APIs and Postgres replaces `SampleRepository` in Phase 5.
+Pages talk only to `BackofficeRepository`. `SampleRepository` (GitHub Pages) and `LiveRepository` (Railway) both run the named operations in `src/lib/data/operations.ts`, so the business rules are identical in both modes.
+
+**Storage (stage 1):** Postgres holds the business data as one versioned JSON document (`Workspace`), plus an append-only change log (`WorkspaceEvent`). Each change locks the row, applies the operation, and writes the new version and the log entry in one transaction, so concurrent changes can't overwrite each other. Splitting into per-entity tables can happen before production without changing the API.
 
 ## Rules encoded (and temporary assumptions)
 

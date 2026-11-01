@@ -12,7 +12,8 @@ SOURCE_BRANCH="$(git -C "$ROOT" rev-parse --abbrev-ref HEAD)"
 
 cd "$ROOT"
 rm -rf out
-STATIC_EXPORT=1 BASE_PATH="$BASE_PATH" npx next build
+# Force sample mode: a local .env may set live mode, and the static site has no server.
+STATIC_EXPORT=1 BASE_PATH="$BASE_PATH" NEXT_PUBLIC_DATA_MODE=sample NEXT_PUBLIC_APP_ENV=preview npx next build
 touch out/.nojekyll   # serve the _next/ directory as-is
 
 WORK="$(mktemp -d)"
