@@ -35,6 +35,7 @@ The repo already contains what Railway needs: `railway.json` (build, start, heal
 
 ## How it behaves
 
+- **Deploys and open tabs.** Pushing to the branch redeploys automatically. You stay signed in across deploys (sessions depend only on `AUTH_SECRET` and the password). A tab that was open before a deploy notices the new version when you return to it, every few minutes while visible, or on its next save, and shows **"Backoffice was updated — Reload"**; its next page change reloads automatically. Pages are sent with `Cache-Control: no-cache` so no cache serves an old version; script files are cached long-term because their names change every build. Each build gets an ID from `scripts/write-deployment-id.mjs` (part of `npm run build`).
 - **Migrations** run automatically at the start of each deploy (`prisma migrate deploy`). If one fails, the new version doesn't start and the previous one keeps serving.
 - **Health check:** Railway waits for `/api/health` (which also checks the database) before switching traffic to a new deploy.
 - **Security:** see [security-review.md](security-review.md). `APP_ENV` must be exactly `development` to enable development tools; anything else (including unset) is treated as production.
