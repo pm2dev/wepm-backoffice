@@ -54,6 +54,8 @@ export interface BackofficeRepository {
   setInvoiceManuallyPaid(invoiceId: string, value: { on: ISODate; note?: string } | null): Promise<void>;
   /** Mark a received payment done/handled (null reopens it). */
   setPaymentDone(receiptId: string, value: { on: ISODate; note?: string } | null): Promise<void>;
+  /** Integration settings (no secrets). */
+  setQuickBooksRealmId(realmId: string): Promise<void>;
   /** Prototype only: emulate a QuickBooks payment arriving. */
   simulateQuickBooksPayment?: (input: { customerId: string; amountCents: Cents; receivedOn: ISODate; invoiceId?: string; paymentRef?: string }, today: ISODate) => Promise<InvoiceReceipt>;
   /** Only available for sample data. Never present on a live repository. */

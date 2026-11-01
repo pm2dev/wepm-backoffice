@@ -208,3 +208,10 @@ export function simulateQuickBooksPayment(
   );
   return { data: result.data, receipt: result.data.invoiceReceipts.find((r) => r.externalPaymentId === paymentId)! };
 }
+
+/** Save the QuickBooks company ID (realmId) used to accept webhooks. */
+export function setQuickBooksRealmId(data: BackofficeData, realmId: string): BackofficeData {
+  const v = realmId.trim();
+  if (v && !/^\d{4,20}$/.test(v)) throw new DomainError("A QuickBooks company ID is a number, e.g. 9130350000000000.");
+  return { ...data, integrations: { ...data.integrations, quickbooksRealmId: v || undefined } };
+}

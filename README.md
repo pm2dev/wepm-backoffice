@@ -43,7 +43,8 @@ Use **Demo controls** in the purple banner to set the business date (the sample 
 | `/cash-flow` | Customer payments from QuickBooks, filtered New / Done / All (`?show=`), with **Mark done** and **Reopen**. Includes a labeled "simulate a payment" form for the prototype |
 | `/cash-flow/receipt?id=` | One payment: which invoices QuickBooks applied it to, suggestions for using it (contractor pay first, then bills, then the remainder or shortfall), and Mark done / Reopen |
 | `/cash-flow/invoices` | QuickBooks invoices (Open / Paid / All) with balance, due date, overdue days, payments applied, a link to the billed hours, and **Mark paid** (manual override) / **Undo mark**. Customer pages list their invoices too |
-| Overview, Settings | "Coming soon" (Overview is deferred until its contents are defined) |
+| `/settings` | Integrations: Slashbin destination URLs to copy, QuickBooks and wepm.app connection status, QuickBooks company ID, and a webhook tester (paste a QuickBooks webhook body to see the lookups, deletions and ignored notices). Connecting needs the production server |
+| Overview | "Coming soon" (deferred until its contents are defined) |
 
 Detail pages use query strings instead of path segments so the app can be exported as a static site. URLs live in `src/lib/routes.ts`.
 

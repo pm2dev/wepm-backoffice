@@ -11,7 +11,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/customers", label: "Customers", icon: Building2, ready: true },
   { href: "/projects", label: "Projects & billing", icon: Briefcase, ready: true },
   { href: "/cash-flow", label: "Cash flow", icon: CalendarClock, ready: true },
-  { href: "/settings", label: "Settings", icon: Settings, ready: false },
+  { href: "/settings", label: "Settings", icon: Settings, ready: true },
 ];
 
 export function isActive(pathname: string, href: string) {

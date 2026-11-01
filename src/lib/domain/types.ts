@@ -314,8 +314,14 @@ export type InvoiceReceipt = {
   sample?: boolean;
 };
 
+/** Owner-editable integration settings. Secrets never live here — they stay on the server. */
+export type IntegrationSettings = {
+  /** QuickBooks company ID (realmId); webhooks for any other company are ignored. */
+  quickbooksRealmId?: string;
+};
+
 export type BackofficeData = {
-  schemaVersion: 6;
+  schemaVersion: 7;
   contractors: Contractor[];
   rates: ContractorRate[];
   projects: Project[];
@@ -332,4 +338,5 @@ export type BackofficeData = {
   billingRecords: BillingRecord[];
   invoiceReceipts: InvoiceReceipt[];
   quickbooksInvoices: QuickBooksInvoice[];
+  integrations: IntegrationSettings;
 };

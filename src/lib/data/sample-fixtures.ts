@@ -52,7 +52,7 @@ function entries(
 export function buildSampleData(): BackofficeData {
   const id = sequentialIds();
   let data: BackofficeData = {
-    schemaVersion: 6,
+    schemaVersion: 7,
     contractors: [
       {
         id: "c_maya",
@@ -122,6 +122,7 @@ export function buildSampleData(): BackofficeData {
     billingRecords: [],
     invoiceReceipts: [],
     quickbooksInvoices: [],
+    integrations: {},
     timeEntries: [
       // Maya — Oct 5–11 and Oct 12–18 (finalized below), Oct 19–25 crosses her Oct 21 raise
       ...entries("c_maya", "wepm_ts_m1005", "2026-10-12", [

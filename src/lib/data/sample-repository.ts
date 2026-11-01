@@ -9,7 +9,7 @@ import type { BackofficeRepository } from "./repository";
 import { buildSampleData } from "./sample-fixtures";
 
 /** Separate namespace so demo storage can never be mistaken for real data. */
-const STORAGE_KEY = "backoffice.sample-data.v6";
+const STORAGE_KEY = "backoffice.sample-data.v7";
 
 /**
  * Frontend-prototype repository: sample data persisted in localStorage.
@@ -25,7 +25,7 @@ export class SampleRepository implements BackofficeRepository {
     if (raw) {
       try {
         const parsed = JSON.parse(raw) as BackofficeData;
-        if (parsed.schemaVersion === 6) return (this.data = parsed);
+        if (parsed.schemaVersion === 7) return (this.data = parsed);
       } catch {
         /* fall through to fresh sample data */
       }
@@ -158,6 +158,10 @@ export class SampleRepository implements BackofficeRepository {
 
   async setPaymentDone(receiptId: string, value: { on: string; note?: string } | null) {
     this.commit(qb.setPaymentDone(await this.load(), receiptId, value));
+  }
+
+  async setQuickBooksRealmId(realmId: string) {
+    this.commit(qb.setQuickBooksRealmId(await this.load(), realmId));
   }
 
   simulateQuickBooksPayment = async (input: Parameters<NonNullable<BackofficeRepository["simulateQuickBooksPayment"]>>[0], today: string) => {
