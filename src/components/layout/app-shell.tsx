@@ -6,6 +6,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Suspense, useState, type ReactNode } from "react";
 import { LoadingState } from "@/components/ui/states";
+import { AccountMenu } from "@/components/auth/account-menu";
 import { BackofficeProvider } from "@/lib/data/backoffice-provider";
 import { cn } from "@/lib/utils";
 import { isActive, NAV_ITEMS } from "./nav-items";
@@ -82,6 +83,9 @@ export function AppShell({ children }: { children: ReactNode }) {
               <nav aria-label="Main">
                 <NavList />
               </nav>
+              <div className="mt-auto">
+                <AccountMenu />
+              </div>
             </div>
           </aside>
 
@@ -115,6 +119,9 @@ export function AppShell({ children }: { children: ReactNode }) {
                     <nav aria-label="Main">
                       <NavList onNavigate={() => setOpen(false)} />
                     </nav>
+                    <div className="mt-auto pb-[env(safe-area-inset-bottom)]">
+                      <AccountMenu />
+                    </div>
                   </RadixDialog.Content>
                 </RadixDialog.Portal>
               </RadixDialog.Root>

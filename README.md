@@ -13,7 +13,7 @@ npm run build && npm start
 
 ### Railway (development and production)
 
-The app runs as a Next.js server with PostgreSQL (Prisma 7). See **[docs/railway.md](docs/railway.md)** for step-by-step setup of the `development` and `production` environments. With `NEXT_PUBLIC_DATA_MODE=live`, every change goes to `POST /api/ops` and runs the same business rules on the server inside a database transaction. `GET /api/health` is the Railway health check.
+The app runs as a Next.js server with PostgreSQL (Prisma 7). See **[docs/railway.md](docs/railway.md)** for step-by-step setup of the `development` and `production` environments. With `NEXT_PUBLIC_DATA_MODE=live`, every change goes to `POST /api/ops` and runs the same business rules on the server inside a database transaction. `GET /api/health` is the Railway health check. The hosted app requires signing in (one owner login from `AUTH_USERNAME` / `AUTH_PASSWORD`, sessions signed with `AUTH_SECRET`); the GitHub Pages preview has no sign-in.
 
 ### GitHub Pages preview (phone testing)
 
@@ -58,7 +58,8 @@ Detail pages use query strings instead of path segments so the app can be export
 src/lib/domain/     pure business rules (dates, money, rates, schedule, payroll, ingestion) + tests
 src/lib/data/       operations (every change, shared by browser and server), repositories (sample/localStorage, live/API), fixtures, provider/clock
 src/server/         Prisma client and the Postgres-backed store (server-only)
-src/app/api/        /api/data, /api/ops, /api/health
+src/app/api/        /api/data, /api/ops, /api/health, /api/auth/{login,logout,session}
+src/proxy.ts        sign-in gate for the hosted app (pages → /login, API → 401)
 prisma/             schema and migrations
 src/components/ui/  shared primitives (button, badge, dialog, fields, states)
 src/components/layout/  app shell, navigation, sample banner, notices

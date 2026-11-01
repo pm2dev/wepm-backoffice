@@ -23,21 +23,27 @@ The repo already contains what Railway needs: `railway.json` (build, start, heal
    | `APP_ENV` | `development` | `production` |
    | `NEXT_PUBLIC_DATA_MODE` | `live` | `live` |
    | `NEXT_PUBLIC_APP_ENV` | `development` | `production` |
+   | `AUTH_USERNAME` | your sign-in username | a different username |
+   | `AUTH_PASSWORD` | your sign-in password | a different, strong password |
+   | `AUTH_SECRET` | 64 random characters | different 64 random characters |
+
+   Sign-in is refused until all three `AUTH_*` values are set (`AUTH_SECRET` must be at least 32 characters). Changing `AUTH_PASSWORD` or `AUTH_SECRET` signs everyone out. Use different values in each environment, and never commit them.
 
    `NEXT_PUBLIC_*` values are baked in at build time — redeploy after changing them.
 6. **Give it a URL.** `backoffice` → **Settings → Networking → Generate Domain**.
-7. **Deploy and check.** Open `https://<your-domain>/api/health` — it should show `{"status":"ok","env":"development","database":"ok",…}`. Then open the app: an amber **Development environment** banner shows at the top, and the data starts as the sample set.
+7. **Deploy and check.** Open `https://<your-domain>/api/health` — it should show `{"status":"ok","env":"development","database":"ok",…}` (the health check doesn't require signing in). Then open the app: you're sent to **Sign in**; after signing in, an amber **Development environment** banner shows at the top, and the data starts as the sample set.
 
 ## How it behaves
 
 - **Migrations** run automatically at the start of each deploy (`prisma migrate deploy`). If one fails, the new version doesn't start and the previous one keeps serving.
 - **Health check:** Railway waits for `/api/health` (which also checks the database) before switching traffic to a new deploy.
+- **Sign-in** protects every page and API route except `/login` and `/api/health`. Signed-out visitors are sent to `/login` and returned to the page they asked for afterwards.
 - **Development tools** (Development controls in the banner): set the business date, reload the sample data, or start empty. Simulated QuickBooks payments are allowed. The server refuses all of these when `APP_ENV=production`.
 - **History:** every change is recorded in the `WorkspaceEvent` table (operation, input, business date, time), alongside the current data in `Workspace`.
 
 ## Before production holds real data
 
-- **Sign-in.** There is no authentication yet, by request. Anyone with the URL can view and change data — fine for sample data in development, **not** for real business data. Add owner sign-in before entering real data in production.
+- **Sign-in.** There is one owner login from the `AUTH_*` variables, with signed, HttpOnly session cookies (7 days), a sign-in page, sign-out, and a limit of 10 failed attempts per IP per 15 minutes. The current username/password are meant to be temporary: before production holds real data, set a strong password (or move to a proper identity provider / passkeys) and consider two-factor sign-in.
 - **Backups.** Turn on Railway's Postgres backups for the production database.
 - **Integrations.** The Slashbin/QuickBooks webhook endpoints and the read-only QuickBooks connection are not built yet (see `integrations.md`).
 
