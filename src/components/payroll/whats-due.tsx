@@ -175,7 +175,7 @@ function ExceptionsNotice({ data }: { data: BackofficeData }) {
             </li>
           ))}
         </ul>
-        <p className="mt-3 text-xs text-amber-900">Mapping wepm.app IDs to contractors and projects will be available on the Contractors and Projects pages.</p>
+        <p className="mt-3 text-xs text-amber-900">Contractors are matched by the wepm.app person ID on their profile; project mapping arrives with the Projects page.</p>
       </details>
     </Card>
   );

@@ -14,6 +14,9 @@ function sequentialIds(): IdFactory {
   return (prefix) => `${prefix}_s${String(++n).padStart(3, "0")}`;
 }
 
+const HISTORICAL_PROJECT_NAMES: Record<string, string> = { p_acme: "Member portal", p_northwind: "Data migration" };
+const HISTORICAL_CLIENTS: Record<string, string> = { p_acme: "Acme Corp", p_northwind: "Northwind" };
+
 type EntrySpec = [workDate: string, hours: number, projectId: string, task: string];
 
 function entries(
@@ -23,25 +26,30 @@ function entries(
   specs: EntrySpec[],
   source: TimeEntry["source"] = "wepm",
 ): TimeEntry[] {
+  const historical = source !== "wepm";
   return specs.map(([workDate, hours, projectId, task], i) => ({
     id: `te_${contractorId}_${workDate}_${i}`,
     contractorId,
-    projectId,
+    // Historical imports keep the source's project text rather than a Backoffice project.
+    projectId: historical ? null : projectId,
     task,
     workDate,
     minutes: Math.round(hours * 60),
     source,
     sourceEntryId: `${source}-${contractorId}-${workDate}-${i}`,
-    sourceTimesheetId: timesheetId,
+    sourceTimesheetId: historical ? undefined : timesheetId,
     approvedAt,
     approvedBy: approvedAt ? "R. Manager" : undefined,
+    ...(historical
+      ? { importBatchId: timesheetId, sourceProject: HISTORICAL_PROJECT_NAMES[projectId] ?? projectId, sourceClient: HISTORICAL_CLIENTS[projectId], sourceHours: String(hours) }
+      : {}),
   }));
 }
 
 export function buildSampleData(): BackofficeData {
   const id = sequentialIds();
   let data: BackofficeData = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     contractors: [
       {
         id: "c_maya",
@@ -161,6 +169,10 @@ export function buildSampleData(): BackofficeData {
     payrolls: [],
     adjustments: [],
     payments: [],
+    importBatches: [
+      { id: "harvest_2025_03", contractorId: "c_maya", fileName: "maya-harvest-2025-03.csv", format: "harvest", importedOn: "2026-10-10", rowCount: 2, importedCount: 2, skippedInvalid: 0, skippedDuplicates: 0, importedMinutes: 13 * 60, firstWorkDate: "2025-03-04", lastWorkDate: "2025-03-05" },
+      { id: "harvest_2026_08", contractorId: "c_sam", fileName: "sam-harvest-aug-2026.csv", format: "harvest", importedOn: "2026-10-10", rowCount: 2, importedCount: 2, skippedInvalid: 0, skippedDuplicates: 0, importedMinutes: 16 * 60, firstWorkDate: "2026-08-24", lastWorkDate: "2026-08-25" },
+    ],
   };
 
   // Finalize and pay earlier weeks as they would have happened.

@@ -21,13 +21,13 @@ export function EntriesTable({ data, entries, contractorId, caption }: { data: B
         </thead>
         <tbody className="divide-y divide-slate-200">
           {entries.map((e) => {
-            const p = projects.get(e.projectId);
+            const p = e.projectId ? projects.get(e.projectId) : undefined;
             const rate = rateOn(data.rates, contractorId, e.workDate);
             return (
               <tr key={e.id}>
                 <td className="whitespace-nowrap px-4 py-2.5">{formatDate(e.workDate, { weekday: true, year: false })}</td>
                 <td className="px-4 py-2.5">
-                  {p ? p.name : "Unknown project"}
+                  {p ? p.name : (e.sourceProject ?? "Unknown project")}
                   {p?.customerName ? <span className="text-slate-500"> ({p.customerName})</span> : null}
                   {p && !p.billable ? <span className="text-slate-500"> · nonbillable</span> : null}
                   <span className="text-slate-600"> · {e.task}</span>

@@ -23,5 +23,6 @@ export function describeSchedule(contractor: Contractor): string {
   const delay = contractor.schedule.payDelayDays;
   const weekday = names[(6 + delay) % 7];
   if (delay >= 1 && delay <= 7) return `Weekly · paid the following ${weekday}`;
+  if (delay >= 8 && delay <= 14) return `Weekly · paid the second ${weekday} after the week ends`;
   return `Weekly · paid ${delay} days after the week ends (${weekday})`;
 }

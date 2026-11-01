@@ -57,10 +57,14 @@ export type TimeEntrySource = "wepm" | "harvest_import" | "workbook_import";
 export type TimeEntry = {
   id: string;
   contractorId: string;
-  projectId: string;
+  /** Backoffice project. Null for historical imports whose project only exists as source text. */
+  projectId: string | null;
   task: string;
   workDate: ISODate;
-  /** Source duration preserved in whole minutes. */
+  /**
+   * Duration in minutes. Whole minutes for wepm.app; historical imports keep
+   * the source's decimal hours exactly (e.g. 1.33 h = 79.8 min) — see `sourceHours`.
+   */
   minutes: number;
   source: TimeEntrySource;
   /** Stable identity in the source system; dedupe key with `source`. */
@@ -68,6 +72,28 @@ export type TimeEntry = {
   sourceTimesheetId?: string;
   approvedAt?: ISODate;
   approvedBy?: string;
+  /** Historical-import provenance. */
+  importBatchId?: string;
+  sourceProject?: string;
+  sourceClient?: string;
+  sourceHours?: string;
+  notes?: string;
+};
+
+/** One upload of historical hours into a contractor's record. */
+export type ImportBatch = {
+  id: string;
+  contractorId: string;
+  fileName: string;
+  format: "harvest" | "template";
+  importedOn: ISODate;
+  rowCount: number;
+  importedCount: number;
+  skippedInvalid: number;
+  skippedDuplicates: number;
+  importedMinutes: number;
+  firstWorkDate?: ISODate;
+  lastWorkDate?: ISODate;
 };
 
 /** Raw record as delivered by Slashbin (shape TBD — PRD §19.1). */
@@ -146,7 +172,7 @@ export type PaymentRecord = {
 };
 
 export type BackofficeData = {
-  schemaVersion: 1;
+  schemaVersion: 2;
   contractors: Contractor[];
   rates: ContractorRate[];
   projects: Project[];
@@ -155,4 +181,5 @@ export type BackofficeData = {
   payrolls: FinalizedPayroll[];
   adjustments: Adjustment[];
   payments: PaymentRecord[];
+  importBatches: ImportBatch[];
 };

@@ -92,7 +92,9 @@ export function DraftReviewPage({ draftKey }: { draftKey: string }) {
           <AlertTriangle className="size-5 shrink-0 text-red-700" aria-hidden />
           <p>
             {formatHours(draft.missingRateMinutes)} worked on {draft.missingRateDates.map((d) => formatDate(d, { year: false })).join(", ")} have no hourly rate on file for {contractor.name}. Add a rate effective on or before those dates before finalizing. Missing rates are never treated as $0.
-            <span className="mt-1 block text-xs text-red-800">Rate history is managed on the Contractors page (coming soon).</span>
+            <Link href={`/contractors/${contractor.id}#rates`} className="mt-2 inline-flex min-h-11 items-center font-medium text-red-900 underline underline-offset-2 pointer-fine:min-h-0">
+              Add a rate for {contractor.name}
+            </Link>
           </p>
         </Card>
       ) : null}
