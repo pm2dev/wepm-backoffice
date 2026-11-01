@@ -1,5 +1,5 @@
 import * as billing from "@/lib/domain/billing";
-import { recordInvoiceReceipt } from "@/lib/domain/cashflow";
+import * as qb from "@/lib/domain/quickbooks-sync";
 import * as contractors from "@/lib/domain/contractors";
 import * as expenses from "@/lib/domain/expenses";
 import { commitImport } from "@/lib/domain/history-import";
@@ -9,7 +9,7 @@ import type { BackofficeRepository } from "./repository";
 import { buildSampleData } from "./sample-fixtures";
 
 /** Separate namespace so demo storage can never be mistaken for real data. */
-const STORAGE_KEY = "backoffice.sample-data.v5";
+const STORAGE_KEY = "backoffice.sample-data.v7";
 
 /**
  * Frontend-prototype repository: sample data persisted in localStorage.
@@ -25,7 +25,7 @@ export class SampleRepository implements BackofficeRepository {
     if (raw) {
       try {
         const parsed = JSON.parse(raw) as BackofficeData;
-        if (parsed.schemaVersion === 5) return (this.data = parsed);
+        if (parsed.schemaVersion === 7) return (this.data = parsed);
       } catch {
         /* fall through to fresh sample data */
       }
@@ -146,11 +146,29 @@ export class SampleRepository implements BackofficeRepository {
     this.commit(billing.removeBillingRecord(await this.load(), id));
   }
 
-  async recordInvoiceReceipt(input: Parameters<BackofficeRepository["recordInvoiceReceipt"]>[0]) {
-    const r = recordInvoiceReceipt(await this.load(), input);
+  async syncQuickBooks(batch: Parameters<BackofficeRepository["syncQuickBooks"]>[0], today: string) {
+    const r = qb.syncQuickBooks(await this.load(), batch, today);
     this.commit(r.data);
-    return { receipt: r.receipt, duplicate: r.duplicate };
+    return r;
   }
+
+  async setInvoiceManuallyPaid(invoiceId: string, value: { on: string; note?: string } | null) {
+    this.commit(qb.setInvoiceManuallyPaid(await this.load(), invoiceId, value));
+  }
+
+  async setPaymentDone(receiptId: string, value: { on: string; note?: string } | null) {
+    this.commit(qb.setPaymentDone(await this.load(), receiptId, value));
+  }
+
+  async setQuickBooksRealmId(realmId: string) {
+    this.commit(qb.setQuickBooksRealmId(await this.load(), realmId));
+  }
+
+  simulateQuickBooksPayment = async (input: Parameters<NonNullable<BackofficeRepository["simulateQuickBooksPayment"]>>[0], today: string) => {
+    const r = qb.simulateQuickBooksPayment(await this.load(), input, today);
+    this.commit(r.data);
+    return r.receipt;
+  };
 
   resetDemo = async () => this.commit(buildSampleData());
 }

@@ -261,22 +261,67 @@ export type ExpenseCharge = {
   paidOn?: ISODate;
 };
 
-/** A customer invoice payment received in QuickBooks (delivered via Slashbin). */
+/** A manual override recorded by the owner. Never written back to QuickBooks. */
+export type ManualMark = { on: ISODate; note?: string };
+
+/** A customer invoice as it exists in QuickBooks (synced via Slashbin). QuickBooks is the source of truth. */
+export type QuickBooksInvoice = {
+  id: string;
+  /** QuickBooks Invoice.Id — sync key. */
+  qbInvoiceId: string;
+  /** QuickBooks Invoice.DocNumber, e.g. "INV-2026-031". */
+  docNumber?: string;
+  customerId: string | null;
+  qbCustomerId?: string;
+  txnDate: ISODate;
+  dueDate?: ISODate;
+  totalCents: Cents;
+  /** Open balance as reported by QuickBooks. */
+  balanceCents: Cents;
+  lastSyncedOn: ISODate;
+  /** QuickBooks MetaData.LastUpdatedTime of the stored version (older deliveries are ignored). */
+  qbLastUpdated?: string;
+  /** Owner marked it paid/settled in Backoffice (e.g. QuickBooks not updated yet). */
+  manuallyPaid?: ManualMark;
+  /** Prototype-only records are labeled as such. */
+  sample?: boolean;
+};
+
+export type PaymentApplication = { qbInvoiceId: string; amountCents: Cents };
+
+/** A customer payment received in QuickBooks (synced via Slashbin). */
 export type InvoiceReceipt = {
   id: string;
-  /** QuickBooks payment identity — dedupe key. */
+  /** QuickBooks Payment.Id — dedupe key. */
   externalPaymentId: string;
   customerId: string | null;
   quickbooksCustomerId?: string;
+  /** Invoice number(s) the payment was applied to, for display. */
   invoiceRef?: string;
+  appliedTo?: PaymentApplication[];
+  unappliedCents?: Cents;
+  /** QuickBooks MetaData.LastUpdatedTime of the stored version. */
+  qbLastUpdated?: string;
+  /** QuickBooks Payment.PaymentRefNum (check #, ACH reference…). */
+  paymentRef?: string;
   amountCents: Cents;
   receivedOn: ISODate;
+  /** The owner has finished handling this payment (allocated it per the suggestions). */
+  done?: ManualMark;
   /** Prototype-only receipts entered by hand are labeled as such. */
   simulated?: boolean;
+  /** Part of the sample data set. */
+  sample?: boolean;
+};
+
+/** Owner-editable integration settings. Secrets never live here — they stay on the server. */
+export type IntegrationSettings = {
+  /** QuickBooks company ID (realmId); webhooks for any other company are ignored. */
+  quickbooksRealmId?: string;
 };
 
 export type BackofficeData = {
-  schemaVersion: 5;
+  schemaVersion: 7;
   contractors: Contractor[];
   rates: ContractorRate[];
   projects: Project[];
@@ -292,4 +337,6 @@ export type BackofficeData = {
   customers: Customer[];
   billingRecords: BillingRecord[];
   invoiceReceipts: InvoiceReceipt[];
+  quickbooksInvoices: QuickBooksInvoice[];
+  integrations: IntegrationSettings;
 };

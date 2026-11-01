@@ -3,11 +3,14 @@
 import { Info } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { EmptyState, ErrorState, LoadingState, PageHeader } from "@/components/ui/states";
 import { BackLink } from "@/components/payroll/back-link";
+import { Button } from "@/components/ui/button";
+import { useNotice } from "@/components/layout/notice";
+import { DoneBadge, MarkPaymentDoneDialog, SourceBadge } from "./receipts";
 import { useBackoffice } from "@/lib/data/backoffice-provider";
 import { BILL_HORIZON_DAYS, recommend, type Suggestion } from "@/lib/domain/cashflow";
 import { formatDate, formatRange } from "@/lib/domain/dates";
@@ -19,7 +22,9 @@ const KIND_LABEL: Record<Suggestion["kind"], string> = { payroll: "Payroll", bon
 
 export function RecommendationRoute() {
   const id = useSearchParams().get("id") ?? "";
-  const { state, today } = useBackoffice();
+  const { state, today, mutate } = useBackoffice();
+  const notify = useNotice();
+  const [marking, setMarking] = useState(false);
   const rec = useMemo(() => {
     if (state.status !== "ready" || !state.data.invoiceReceipts.some((r) => r.id === id)) return null;
     return recommend(state.data, id, today);
@@ -44,9 +49,48 @@ export function RecommendationRoute() {
       <BackLink href={routes.cashFlow} label="Cash flow" />
       <PageHeader
         title={`${formatCents(rec.incomingCents)} from ${customer?.name ?? "an unmatched customer"}`}
-        description={`Received ${formatDate(rec.receipt.receivedOn, { weekday: true })}${rec.receipt.invoiceRef ? ` · ${rec.receipt.invoiceRef}` : ""}`}
+        description={`Received ${formatDate(rec.receipt.receivedOn, { weekday: true })}${rec.receipt.paymentRef ? ` · ${rec.receipt.paymentRef}` : ""}`}
+        actions={
+          rec.receipt.done ? (
+            <Button
+              variant="secondary"
+              onClick={async () => {
+                await mutate((r) => r.setPaymentDone(rec.receipt.id, null));
+                notify("Payment reopened.");
+              }}
+            >
+              Reopen
+            </Button>
+          ) : (
+            <Button onClick={() => setMarking(true)}>Mark done</Button>
+          )
+        }
       />
-      {rec.receipt.simulated ? <Badge tone="sample" className="-mt-3 mb-4">Simulated payment</Badge> : null}
+      <div className="-mt-3 mb-4 flex flex-wrap gap-1.5">
+        <DoneBadge r={rec.receipt} />
+        <SourceBadge r={rec.receipt} />
+      </div>
+      {rec.receipt.done?.note ? <p className="mb-4 text-sm text-slate-600">Done note: {rec.receipt.done.note}</p> : null}
+      {rec.receipt.appliedTo?.length || rec.receipt.unappliedCents ? (
+        <p className="mb-4 text-sm text-slate-700">
+          {rec.receipt.appliedTo?.length ? (
+            <>
+              Applied in QuickBooks to{" "}
+              {rec.receipt.appliedTo.map((a, i) => {
+                const inv = state.data.quickbooksInvoices.find((x) => x.qbInvoiceId === a.qbInvoiceId);
+                return (
+                  <span key={a.qbInvoiceId}>
+                    {i ? ", " : ""}
+                    <Link href={routes.invoices} className="underline underline-offset-2">{inv?.docNumber ?? `#${a.qbInvoiceId}`}</Link> ({formatCents(a.amountCents)})
+                  </span>
+                );
+              })}
+            </>
+          ) : null}
+          {rec.receipt.unappliedCents ? <span className="text-amber-800"> {formatCents(rec.receipt.unappliedCents)} not applied to an invoice.</span> : null}
+        </p>
+      ) : null}
+      {marking ? <MarkPaymentDoneDialog data={state.data} receipt={rec.receipt} onClose={() => setMarking(false)} /> : null}
 
       <Card className="mb-6 flex gap-3 border-blue-200 bg-blue-50 p-4 text-sm text-blue-950">
         <Info className="size-5 shrink-0 text-blue-700" aria-hidden />

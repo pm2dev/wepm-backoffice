@@ -40,8 +40,11 @@ Use **Demo controls** in the purple banner to set the business date (the sample 
 | `/projects` | Ready to invoice: uninvoiced billable hours × project/task rates by customer, with missing rates flagged; mark invoiced |
 | `/projects/list`, `/projects/profile?id=` | Projects: customer or internal, billable, one hourly rate or rates by task, wepm.app ID |
 | `/projects/invoiced` | Hours marked invoiced, with undo |
-| `/cash-flow`, `/cash-flow/receipt?id=` | Invoice payments received, plus suggestions for each: contractor pay first, then bills, then the remainder or shortfall. Includes a labeled "simulate a payment" form |
-| Overview, Settings | "Coming soon" (Overview is deferred until its contents are defined) |
+| `/cash-flow` | Customer payments from QuickBooks, filtered New / Done / All (`?show=`), with **Mark done** and **Reopen**. Includes a labeled "simulate a payment" form for the prototype |
+| `/cash-flow/receipt?id=` | One payment: which invoices QuickBooks applied it to, suggestions for using it (contractor pay first, then bills, then the remainder or shortfall), and Mark done / Reopen |
+| `/cash-flow/invoices` | QuickBooks invoices (Open / Paid / All) with balance, due date, overdue days, payments applied, a link to the billed hours, and **Mark paid** (manual override) / **Undo mark**. Customer pages list their invoices too |
+| `/settings` | Integrations: Slashbin destination URLs to copy, QuickBooks and wepm.app connection status, QuickBooks company ID, and a webhook tester (paste a QuickBooks webhook body to see the lookups, deletions and ignored notices). Connecting needs the production server |
+| Overview | "Coming soon" (deferred until its contents are defined) |
 
 Detail pages use query strings instead of path segments so the app can be exported as a static site. URLs live in `src/lib/routes.ts`.
 
@@ -77,6 +80,9 @@ Pages talk only to `BackofficeRepository`. A live implementation backed by authe
 - **Bills:** a charge is one occurrence of an expense, generated from its schedule (month-end anchors clamp, e.g. Jan 31 → Feb 28) and stored once something is recorded. Edits apply from today and store all earlier charges; stopping keeps earlier charges. Autopay never marks anything paid. Entering an actual amount updates the same charge.
 - **Billing:** only approved, billable (customer) project hours that aren't yet invoiced are billed. Amount = round(minutes × rate ÷ 60) once per task line. A missing task rate blocks that project's total and its invoiced marking. Marking invoiced preserves the billed lines and never marks anything paid. **Assumption (PRD §19.5):** billing rates aren't effective-dated; the current rate applies to uninvoiced hours. Cadence is shown but doesn't filter yet.
 - Saving a contractor or project with a newly mapped wepm.app ID re-checks held-back time entries.
+- **QuickBooks invoices & payments:** QuickBooks is the source of truth. Invoices and payments are synced by QuickBooks ID, so re-delivery updates rather than duplicates, and the owner's manual marks survive syncs. Customers are matched by QuickBooks customer ID only. Records that can't be mapped are rejected and reported. Deleted QuickBooks records are removed unless the owner marked them. All mapping from QuickBooks Online's Invoice and Payment objects lives in `src/lib/integrations/quickbooks.ts`.
+  - **Manual "done":** an invoice can be marked paid in Backoffice, for example when it was paid outside QuickBooks or QuickBooks hasn't caught up. This is never written back to QuickBooks. A later sync showing a zero balance replaces it ("Paid in QuickBooks"). A payment can be marked done once you've handled it. Both can be undone. Neither changes contractor pay, bills, or suggestions.
+  - **Slashbin is a webhook gateway.** QuickBooks webhooks are change notices only (entity, ID, operation, time), so production needs a server endpoint that verifies the signature, parses the notices, fetches each Invoice/Payment from the QuickBooks API (read-only OAuth), then syncs. The notice handling is built and tested; the endpoint and OAuth are Phase 5. See [docs/integrations.md](docs/integrations.md) for the flow and the open questions about the Slashbin and webhook format.
 - **Cash flow:** zero starting balance. Unpaid contractor obligations come first, earliest due first. **Assumption (PRD §19.7):** bonuses and reimbursements rank with payroll by due date. Unfinalized payroll uses its current calculation. Then come unpaid bills due within the next 30 days, then the remainder. A suggestion never exceeds the payment or a balance, and never changes anything. Duplicate QuickBooks payment IDs are ignored. Customers are matched by QuickBooks customer ID only.
 
 ## Verification so far
