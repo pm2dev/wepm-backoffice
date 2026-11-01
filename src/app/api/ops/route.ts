@@ -1,3 +1,4 @@
+import { sessionFromRequest } from "@/server/auth";
 import { DEVELOPMENT_ONLY_OPERATIONS, isOperationName, SERVER_ONLY_OPERATIONS, serializeError, type OperationArgs, type OperationName } from "@/lib/data/operations";
 import { appEnv } from "@/server/db";
 import { runOperation } from "@/server/store";
@@ -8,6 +9,7 @@ import { runOperation } from "@/server/store";
  * with the same messages the forms show.
  */
 export async function POST(request: Request) {
+  if (!sessionFromRequest(request)) return Response.json({ error: { kind: "auth", message: "Please sign in." } }, { status: 401 });
   let body: { op?: unknown; args?: unknown };
   try {
     body = await request.json();
