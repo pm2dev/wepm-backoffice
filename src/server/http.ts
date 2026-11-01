@@ -4,10 +4,15 @@
 
 export type ApiErrorBody = { error: { kind: string; message: string } };
 
+/** Header carrying this server's build, so open tabs can tell when a new version is deployed. */
+export const DEPLOYMENT_HEADER = "x-backoffice-deployment";
+const DEPLOYMENT_ID = process.env.NEXT_PUBLIC_DEPLOYMENT_ID ?? "";
+
 /** JSON response that is never cached (business data, auth state). */
 export function json(body: unknown, init: ResponseInit = {}): Response {
   const headers = new Headers(init.headers);
   headers.set("cache-control", "no-store");
+  if (DEPLOYMENT_ID) headers.set(DEPLOYMENT_HEADER, DEPLOYMENT_ID);
   return Response.json(body, { ...init, headers });
 }
 

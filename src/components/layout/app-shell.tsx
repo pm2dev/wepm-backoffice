@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import { isActive, NAV_ITEMS } from "./nav-items";
 import { NoticeProvider } from "./notice";
 import { SampleBanner } from "./sample-banner";
+import { UpdateBanner } from "./update-banner";
 
 function NavList(props: { onNavigate?: () => void }) {
   // Pathname is request data; keep the shell prerenderable with a non-highlighted fallback.
@@ -128,6 +129,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               <Brand />
             </header>
 
+            <UpdateBanner />
             <SampleBanner />
             <main id="main" className="mx-auto max-w-6xl px-4 py-6 pb-24 sm:px-6 lg:px-8 lg:py-8">
               <Suspense fallback={<LoadingState />}>{children}</Suspense>

@@ -4,6 +4,17 @@ import { BackofficeRepository } from "./repository";
 
 export class ApiError extends Error {}
 
+/** Fired when the server reports a different build than the one this tab is running. */
+export const NEW_VERSION_EVENT = "backoffice:new-version";
+const CLIENT_DEPLOYMENT = process.env.NEXT_PUBLIC_DEPLOYMENT_ID ?? "";
+
+export function checkDeployment(res: Response) {
+  const server = res.headers.get("x-backoffice-deployment");
+  if (CLIENT_DEPLOYMENT && server && server !== CLIENT_DEPLOYMENT && typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent(NEW_VERSION_EVENT));
+  }
+}
+
 function toLogin(): never {
   if (typeof window !== "undefined") {
     const here = window.location.pathname + window.location.search;
@@ -26,6 +37,7 @@ export class LiveRepository extends BackofficeRepository {
 
   async load(): Promise<BackofficeData> {
     const res = await fetch(`${this.basePath}/api/data`, { cache: "no-store" });
+    checkDeployment(res);
     if (res.status === 401) toLogin();
     if (!res.ok) throw new ApiError(`Couldn't load data from the server (${res.status}).`);
     return ((await res.json()) as { data: BackofficeData }).data;
@@ -42,6 +54,7 @@ export class LiveRepository extends BackofficeRepository {
     } catch {
       throw new ApiError("Couldn't reach the server. Check your connection and try again; nothing was saved.");
     }
+    checkDeployment(res);
     if (res.status === 401) toLogin();
     const body = (await res.json().catch(() => null)) as { result?: OperationResult<K>; error?: SerializedError } | null;
     if (body?.error) throw deserializeError(body.error);

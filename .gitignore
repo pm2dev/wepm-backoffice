@@ -41,3 +41,6 @@ yarn-error.log*
 next-env.d.ts
 
 /src/generated/prisma
+
+# per-build deployment ID (scripts/write-deployment-id.mjs)
+/.deployment-id
