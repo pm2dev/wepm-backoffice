@@ -39,7 +39,7 @@ export function ReceiptsPage() {
       <PageHeader
         title="Cash flow"
         description="Customer payments from QuickBooks. Open one to see a suggested way to use it — contractor pay first, then bills — and mark it done once you've handled it."
-        actions={state.status === "ready" && repo.simulateQuickBooksPayment ? <SimulateDialog data={state.data} /> : null}
+        actions={state.status === "ready" && repo.devTools ? <SimulateDialog data={state.data} /> : null}
       />
       <CashFlowTabs />
       {state.status === "loading" ? <LoadingState /> : null}
@@ -206,7 +206,7 @@ function SimulateForm({ data, onDone }: { data: BackofficeData; onDone: () => vo
         if (cents === null || cents <= 0) return setError("Enter an amount greater than $0.");
         if (!isISODate(receivedOn)) return setError("Enter the date received.");
         try {
-          const receipt = await mutate((r) => r.simulateQuickBooksPayment!({ customerId, amountCents: cents, receivedOn, invoiceId: invoiceId || undefined, paymentRef }, today));
+          const receipt = await mutate((r) => r.simulateQuickBooksPayment({ customerId, amountCents: cents, receivedOn, invoiceId: invoiceId || undefined, paymentRef }, today));
           notify(`Simulated ${formatCents(cents)} QuickBooks payment received.`);
           onDone();
           router.push(routes.receipt(receipt.id));

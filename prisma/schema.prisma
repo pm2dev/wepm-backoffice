@@ -1,0 +1,45 @@
+// Backoffice database schema (PostgreSQL via Prisma 7).
+//
+// Stage 1 storage: the owner's business data is one versioned JSON document
+// (validated by the app's domain rules), plus an append-only log of every
+// change for history and recovery. Splitting it into per-entity tables can
+// happen before production without changing the API the app uses.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+/// The business data for one Backoffice workspace (the owner's company).
+model Workspace {
+  id            String           @id
+  /// Incremented on every change; used for row-level concurrency control.
+  version       Int              @default(0)
+  /// Shape version of `data` (BackofficeData.schemaVersion).
+  schemaVersion Int
+  data          Json
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  events        WorkspaceEvent[]
+}
+
+/// Append-only history: which operation ran, with what input, producing which version.
+model WorkspaceEvent {
+  id           BigInt    @id @default(autoincrement())
+  workspaceId  String
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  /// Workspace version after this change.
+  version      Int
+  operation    String
+  args         Json
+  /// Business date the owner was working on (may differ from createdAt in development).
+  businessDate String?
+  createdAt    DateTime  @default(now())
+
+  @@unique([workspaceId, version])
+  @@index([workspaceId, createdAt])
+}
