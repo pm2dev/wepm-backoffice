@@ -1,15 +1,15 @@
 import { connection } from "next/server";
-import { SCHEMA_VERSION } from "@/lib/domain/empty";
-import { appEnv, db } from "@/server/db";
+import { db } from "@/server/db";
+import { json } from "@/server/http";
 
-/** GET /api/health — used by Railway's health check. Verifies the database is reachable. */
+/** GET /api/health — Railway's health check. Public, so it reveals nothing beyond up/down. */
 export async function GET() {
   await connection(); // request-time only: never query the database during the build
   try {
     await db().$queryRaw`SELECT 1`;
-    return Response.json({ status: "ok", env: appEnv(), database: "ok", schemaVersion: SCHEMA_VERSION }, { headers: { "cache-control": "no-store" } });
+    return json({ status: "ok", database: "ok" });
   } catch (e) {
     console.error("Health check: database unreachable", e);
-    return Response.json({ status: "error", env: appEnv(), database: "unreachable" }, { status: 503 });
+    return json({ status: "error", database: "unreachable" }, { status: 503 });
   }
 }

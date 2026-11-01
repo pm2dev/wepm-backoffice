@@ -12,7 +12,7 @@ export const DATA_MODE = process.env.NEXT_PUBLIC_DATA_MODE === "live" ? "live" :
 export const APP_ENV = process.env.NEXT_PUBLIC_APP_ENV === "production" ? "production" : process.env.NEXT_PUBLIC_APP_ENV === "development" ? "development" : "preview";
 
 function createRepository(): BackofficeRepository {
-  if (DATA_MODE === "live") return new LiveRepository(process.env.NEXT_PUBLIC_BASE_PATH ?? "", APP_ENV !== "production");
+  if (DATA_MODE === "live") return new LiveRepository(process.env.NEXT_PUBLIC_BASE_PATH ?? "", APP_ENV === "development");
   return new SampleRepository();
 }
 

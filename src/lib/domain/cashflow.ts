@@ -25,7 +25,20 @@ export function recordInvoiceReceipt(
   if (errors.length) throw new DomainError(errors.join(" "));
   // Explicit mapping only: QuickBooks customer ID → Backoffice customer.
   const customerId = input.customerId ?? data.customers.find((c) => input.quickbooksCustomerId && c.quickbooksCustomerId === input.quickbooksCustomerId)?.id ?? null;
-  const receipt: InvoiceReceipt = { ...input, customerId, id: newId("rcpt"), invoiceRef: input.invoiceRef?.trim() || undefined };
+  const receipt: InvoiceReceipt = {
+    id: newId("rcpt"),
+    externalPaymentId: input.externalPaymentId,
+    customerId,
+    quickbooksCustomerId: input.quickbooksCustomerId,
+    invoiceRef: input.invoiceRef?.trim() || undefined,
+    appliedTo: input.appliedTo,
+    unappliedCents: input.unappliedCents,
+    paymentRef: input.paymentRef,
+    amountCents: input.amountCents,
+    receivedOn: input.receivedOn,
+    simulated: input.simulated,
+    sample: input.sample,
+  };
   return { data: { ...data, invoiceReceipts: [...data.invoiceReceipts, receipt] }, receipt, duplicate: false };
 }
 

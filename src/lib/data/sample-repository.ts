@@ -1,5 +1,7 @@
 import type { BackofficeData } from "@/lib/domain/types";
 import { SCHEMA_VERSION } from "@/lib/domain/empty";
+import { DomainError } from "@/lib/domain/payroll";
+import { parseOperationArgs } from "./operation-schemas";
 import { applyOperation, type OperationArgs, type OperationName, type OperationResult } from "./operations";
 import { BackofficeRepository } from "./repository";
 import { buildSampleData } from "./sample-fixtures";
@@ -37,7 +39,11 @@ export class SampleRepository extends BackofficeRepository {
   }
 
   protected async run<K extends OperationName>(op: K, args: OperationArgs<K>): Promise<OperationResult<K>> {
-    const r = applyOperation(await this.load(), op, args);
+    // Same JSON round trip as the live API (drops undefined, copies values),
+    // so validation behaves identically in both modes.
+    const parsed = parseOperationArgs(op, JSON.parse(JSON.stringify(args ?? {})));
+    if (!parsed.ok) throw new DomainError(`Invalid request (${parsed.reason}).`);
+    const r = applyOperation(await this.load(), op, parsed.args);
     this.commit(r.data);
     return r.result;
   }
