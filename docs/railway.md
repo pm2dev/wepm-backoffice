@@ -31,12 +31,13 @@ The repo already contains what Railway needs: `railway.json` (build, start, heal
 
    `NEXT_PUBLIC_*` values are baked in at build time — redeploy after changing them.
 6. **Give it a URL.** `backoffice` → **Settings → Networking → Generate Domain**.
-7. **Deploy and check.** Open `https://<your-domain>/api/health` — it should show `{"status":"ok","env":"development","database":"ok",…}` (the health check doesn't require signing in). Then open the app: you're sent to **Sign in**; after signing in, an amber **Development environment** banner shows at the top, and the data starts as the sample set.
+7. **Deploy and check.** Open `https://<your-domain>/api/health` — it should show `{"status":"ok","database":"ok"}` (the health check doesn't require signing in). Then open the app: you're sent to **Sign in**; after signing in, an amber **Development environment** banner shows at the top, and the data starts as the sample set.
 
 ## How it behaves
 
 - **Migrations** run automatically at the start of each deploy (`prisma migrate deploy`). If one fails, the new version doesn't start and the previous one keeps serving.
 - **Health check:** Railway waits for `/api/health` (which also checks the database) before switching traffic to a new deploy.
+- **Security:** see [security-review.md](security-review.md). `APP_ENV` must be exactly `development` to enable development tools; anything else (including unset) is treated as production.
 - **Sign-in** protects every page and API route except `/login` and `/api/health`. Signed-out visitors are sent to `/login` and returned to the page they asked for afterwards.
 - **Development tools** (Development controls in the banner): set the business date, reload the sample data, or start empty. Simulated QuickBooks payments are allowed. The server refuses all of these when `APP_ENV=production`.
 - **History:** every change is recorded in the `WorkspaceEvent` table (operation, input, business date, time), alongside the current data in `Workspace`.

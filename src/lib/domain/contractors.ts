@@ -134,7 +134,7 @@ export function addRate(
   }
   if (!Number.isSafeInteger(input.hourlyRateCents) || input.hourlyRateCents <= 0) errors.rate = "Enter an hourly rate greater than $0.";
   if (Object.keys(errors).length) throw new ValidationError(errors);
-  const rate: ContractorRate = { id: newId("rate"), ...input };
+  const rate: ContractorRate = { id: newId("rate"), contractorId: input.contractorId, effectiveDate: input.effectiveDate, hourlyRateCents: input.hourlyRateCents };
   return { data: { ...data, rates: [...data.rates, rate] }, rate };
 }
 

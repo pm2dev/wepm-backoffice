@@ -232,9 +232,26 @@ function validateExpense(data: BackofficeData, input: ExpenseInput) {
   if (Object.keys(e).length) throw new ExpenseValidationError(e);
 }
 
+/** Only the editable fields — never copy unknown keys (or id/createdOn) from input. */
+function expenseFields(input: ExpenseInput) {
+  return {
+    vendor: input.vendor.trim(),
+    type: input.type,
+    projectId: input.projectId || null,
+    frequency: input.frequency,
+    firstDueDate: input.firstDueDate,
+    endDate: input.endDate || undefined,
+    amountKind: input.amountKind,
+    amountCents: input.amountCents,
+    autopay: !!input.autopay,
+    accountId: input.accountId,
+    notes: input.notes?.trim() || undefined,
+  };
+}
+
 export function addExpense(data: BackofficeData, input: ExpenseInput, today: ISODate, newId: IdFactory = randomId): { data: BackofficeData; expense: RecurringExpense } {
   validateExpense(data, input);
-  const expense: RecurringExpense = { ...input, id: newId("exp"), vendor: input.vendor.trim(), notes: input.notes?.trim() || undefined, createdOn: today };
+  const expense: RecurringExpense = { id: newId("exp"), ...expenseFields(input), createdOn: today };
   return { data: { ...data, expenses: [...data.expenses, expense] }, expense };
 }
 
@@ -258,9 +275,9 @@ export function updateExpense(data: BackofficeData, id: string, input: ExpenseIn
   const next = freezePast(data, existing, today, newId);
   const expense: RecurringExpense = {
     ...existing,
-    ...input,
-    vendor: input.vendor.trim(),
-    notes: input.notes?.trim() || undefined,
+    ...expenseFields(input),
+    id: existing.id,
+    createdOn: existing.createdOn,
     // Everything before today is now stored; the edited schedule governs from today on.
     scheduleFrom: today,
   };

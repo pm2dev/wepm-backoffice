@@ -76,7 +76,7 @@ export function ContractorForm({
         paymentReference: v.paymentReference,
         notes: v.notes,
         wepmUserId: v.wepmUserId,
-        initialRateCents,
+        ...(isNew && initialRateCents !== undefined ? { initialRateCents } : {}),
       });
     } catch (err) {
       if (err instanceof ValidationError) setErrors(err.fields);

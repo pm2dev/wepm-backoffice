@@ -14,7 +14,12 @@ export function db(): PrismaClient {
   return globalForPrisma.prisma;
 }
 
-/** "development" | "production" — server-side environment, set per Railway environment. */
+/**
+ * "development" | "production" — server-side environment, set per Railway
+ * environment. Fails closed: anything other than exactly "development"
+ * (including a missing variable) is treated as production, so development
+ * tools can never be switched on by accident.
+ */
 export function appEnv(): "development" | "production" {
-  return process.env.APP_ENV === "production" ? "production" : "development";
+  return process.env.APP_ENV === "development" ? "development" : "production";
 }

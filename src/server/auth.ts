@@ -77,9 +77,14 @@ export function verifySessionToken(token: string | undefined, now = Date.now()):
   }
 }
 
+/**
+ * Cookie flags. Secure is on everywhere except plain-http localhost (local
+ * development), decided from the URL rather than a client-supplied header.
+ */
 export function sessionCookieOptions(request: Request) {
-  const secure = new URL(request.url).protocol === "https:" || request.headers.get("x-forwarded-proto") === "https";
-  return { httpOnly: true, secure, sameSite: "lax" as const, path: "/", maxAge: SESSION_TTL_SECONDS };
+  const host = new URL(request.url).hostname;
+  const local = host === "localhost" || host === "127.0.0.1" || host === "::1";
+  return { httpOnly: true, secure: !local, sameSite: "lax" as const, path: "/", maxAge: SESSION_TTL_SECONDS };
 }
 
 // ---------------------------------------------------------------------------
@@ -88,10 +93,25 @@ export function sessionCookieOptions(request: Request) {
 
 const WINDOW_MS = 15 * 60 * 1000;
 const MAX_FAILURES = 10;
+const MAX_TRACKED = 10_000;
 const failures = new Map<string, { count: number; resetAt: number }>();
 
+/**
+ * Client address for rate limiting. Clients can put anything at the start of
+ * X-Forwarded-For, so use the entry appended by the trusted proxy in front of
+ * the app (Railway's edge): by default the last one. Set TRUSTED_PROXY_HOPS
+ * if more proxies append entries.
+ */
 export function clientIp(request: Request): string {
-  return request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || "unknown";
+  const hops = Math.max(1, Number(process.env.TRUSTED_PROXY_HOPS) || 1);
+  const chain = (request.headers.get("x-forwarded-for") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  return chain[chain.length - hops] ?? chain[0] ?? "unknown";
+}
+
+function prune(now: number) {
+  for (const [key, f] of failures) if (f.resetAt <= now) failures.delete(key);
+  // Hard cap so a flood of addresses can't exhaust memory: drop the oldest entries.
+  while (failures.size > MAX_TRACKED) failures.delete(failures.keys().next().value!);
 }
 
 export function isRateLimited(ip: string, now = Date.now()): boolean {
@@ -101,6 +121,7 @@ export function isRateLimited(ip: string, now = Date.now()): boolean {
 }
 
 export function recordFailure(ip: string, now = Date.now()) {
+  if (failures.size >= MAX_TRACKED) prune(now);
   const f = failures.get(ip);
   if (!f || f.resetAt <= now) failures.set(ip, { count: 1, resetAt: now + WINDOW_MS });
   else f.count++;
@@ -108,6 +129,10 @@ export function recordFailure(ip: string, now = Date.now()) {
 
 export function clearFailures(ip: string) {
   failures.delete(ip);
+}
+
+export function trackedFailureCount() {
+  return failures.size;
 }
 
 /** Read and verify the session from a request's Cookie header. */

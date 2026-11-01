@@ -32,22 +32,24 @@ function validateCustomer(data: BackofficeData, input: CustomerInput, selfId?: s
   if (Object.keys(e).length) throw new FormError(e);
 }
 
-const clean = <T extends { notes?: string; quickbooksCustomerId?: string }>(x: T): T => ({
-  ...x,
-  notes: x.notes?.trim() || undefined,
+/** Only the editable customer fields — never copy unknown keys (or id) from input. */
+const customerFields = (x: CustomerInput) => ({
+  name: x.name.trim(),
+  billingCadence: x.billingCadence,
   quickbooksCustomerId: x.quickbooksCustomerId?.trim() || undefined,
+  notes: x.notes?.trim() || undefined,
 });
 
 export function addCustomer(data: BackofficeData, input: CustomerInput, newId: IdFactory = randomId) {
   validateCustomer(data, input);
-  const customer: Customer = clean({ ...input, id: newId("cust"), name: input.name.trim() });
+  const customer: Customer = { id: newId("cust"), ...customerFields(input) };
   return { data: { ...data, customers: [...data.customers, customer] }, customer };
 }
 
 export function updateCustomer(data: BackofficeData, id: string, input: CustomerInput) {
   if (!data.customers.some((c) => c.id === id)) throw new DomainError("Customer not found.");
   validateCustomer(data, input, id);
-  const customer: Customer = clean({ ...input, id, name: input.name.trim() });
+  const customer: Customer = { id, ...customerFields(input) };
   return { data: { ...data, customers: data.customers.map((c) => (c.id === id ? customer : c)) }, customer };
 }
 
@@ -72,8 +74,19 @@ function validateProject(data: BackofficeData, input: ProjectInput, selfId?: str
 
 function normalizeProject(input: ProjectInput): ProjectInput {
   const taskRates: Record<string, Cents> = {};
-  for (const [t, c] of Object.entries(input.taskRates)) taskRates[t.trim()] = c;
-  return { ...input, name: input.name.trim(), wepmProjectId: input.wepmProjectId?.trim() || undefined, taskRates, customerId: input.customerId || null };
+  for (const [t, c] of Object.entries(input.taskRates ?? {})) if (t.trim()) taskRates[t.trim()] = c;
+  // Explicit fields only — never copy unknown keys from input.
+  return {
+    name: input.name.trim(),
+    customerId: input.customerId || null,
+    billable: !!input.billable,
+    billingMethod: input.billingMethod,
+    hourlyRateCents: input.hourlyRateCents,
+    taskRates,
+    billingCadence: input.billingCadence,
+    wepmProjectId: input.wepmProjectId?.trim() || undefined,
+    active: input.active !== false,
+  };
 }
 
 /** Adding a wepm.app project ID can resolve held-back time entries, so exceptions are re-checked. */
