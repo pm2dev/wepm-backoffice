@@ -1,9 +1,10 @@
 "use client";
 
+import { routes } from "@/lib/routes";
 import { AlertTriangle, Info } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { use, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -57,7 +58,7 @@ export function DraftReviewPage({ draftKey }: { draftKey: string }) {
     try {
       const payroll = await mutate((r) => r.finalizePayroll(draftKey, today));
       notify(`Finalized ${formatCents(payroll.amountCents)} for ${contractor!.name}. It is ready to pay.`);
-      router.replace(`/payroll/records/${payroll.id}`);
+      router.replace(routes.payrollRecord(payroll.id));
     } catch (e) {
       setError(e instanceof DomainError ? e.message : "Could not finalize. Nothing was changed.");
       setSaving(false);
@@ -92,7 +93,7 @@ export function DraftReviewPage({ draftKey }: { draftKey: string }) {
           <AlertTriangle className="size-5 shrink-0 text-red-700" aria-hidden />
           <p>
             {formatHours(draft.missingRateMinutes)} worked on {draft.missingRateDates.map((d) => formatDate(d, { year: false })).join(", ")} have no hourly rate on file for {contractor.name}. Add a rate effective on or before those dates before finalizing. Missing rates are never treated as $0.
-            <Link href={`/contractors/${contractor.id}#rates`} className="mt-2 inline-flex min-h-11 items-center font-medium text-red-900 underline underline-offset-2 pointer-fine:min-h-0">
+            <Link href={routes.contractor(contractor.id, "rates")} className="mt-2 inline-flex min-h-11 items-center font-medium text-red-900 underline underline-offset-2 pointer-fine:min-h-0">
               Add a rate for {contractor.name}
             </Link>
           </p>
@@ -137,7 +138,7 @@ export function DraftReviewPage({ draftKey }: { draftKey: string }) {
   );
 }
 
-export function DraftReviewRoute({ params }: { params: Promise<{ key: string }> }) {
-  const { key } = use(params);
-  return <DraftReviewPage draftKey={decodeURIComponent(key)} />;
+export function DraftReviewRoute() {
+  const value = useSearchParams().get("key") ?? "";
+  return <DraftReviewPage draftKey={value} />;
 }

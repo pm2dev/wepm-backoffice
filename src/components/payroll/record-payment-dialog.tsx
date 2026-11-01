@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, useOpenerElement } from "@/components/ui/dialog";
 import { Field, Input, Select, Textarea } from "@/components/ui/field";
 import { useNotice } from "@/components/layout/notice";
 import { useBackoffice } from "@/lib/data/backoffice-provider";
@@ -34,13 +34,7 @@ export function RecordPaymentDialog({
   preselected: string[];
   onRecorded?: () => void;
 }) {
-  // Opened from code, so remember the control that opened it to restore focus on close.
-  // Safari doesn't focus buttons on click/tap, so activeElement may be <body>; then fall back to the page heading.
-  const [opener] = useState<HTMLElement | null>(() => {
-    if (typeof document === "undefined") return null;
-    const el = document.activeElement as HTMLElement | null;
-    return el && el !== document.body ? el : null;
-  });
+  const opener = useOpenerElement();
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       {open ? (

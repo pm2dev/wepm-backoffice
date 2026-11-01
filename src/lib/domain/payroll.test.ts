@@ -25,7 +25,7 @@ const ids = (): IdFactory => shared;
 
 function base(): BackofficeData {
   return {
-    schemaVersion: 2,
+    schemaVersion: 5,
     contractors: [
       { id: "c1", name: "Test Person", startDate: "2026-01-05", schedule: { kind: "weekly", payDelayDays: 5 }, preferredMethod: "venmo", wepmUserId: "u1" },
     ],
@@ -34,8 +34,8 @@ function base(): BackofficeData {
       { id: "r2", contractorId: "c1", effectiveDate: "2026-10-21", hourlyRateCents: 2500 },
     ],
     projects: [
-      { id: "p1", name: "Client work", billable: true, wepmProjectId: "wp1" },
-      { id: "p2", name: "Internal", billable: false, wepmProjectId: "wp2" },
+      { id: "p1", name: "Client work", customerId: null, billable: true, billingMethod: "hourly", hourlyRateCents: 10000, taskRates: {}, wepmProjectId: "wp1", active: true },
+      { id: "p2", name: "Internal", customerId: null, billable: false, billingMethod: "hourly", taskRates: {}, wepmProjectId: "wp2", active: true },
     ],
     timeEntries: [],
     timeExceptions: [],
@@ -43,6 +43,12 @@ function base(): BackofficeData {
     adjustments: [],
     payments: [],
     importBatches: [],
+    paymentAccounts: [],
+    expenses: [],
+    expenseCharges: [],
+    customers: [],
+    billingRecords: [],
+    invoiceReceipts: [],
   };
 }
 

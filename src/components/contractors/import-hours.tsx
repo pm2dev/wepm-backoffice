@@ -1,8 +1,9 @@
 "use client";
 
+import { routes } from "@/lib/routes";
 import { AlertTriangle, Download, FileUp } from "lucide-react";
-import { useRouter } from "next/navigation";
-import { use, useMemo, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useMemo, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -18,9 +19,9 @@ import type { Contractor } from "@/lib/domain/types";
 
 const MAX_BYTES = 5 * 1024 * 1024;
 
-export function ImportHoursRoute({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
-  return <ImportHoursPage contractorId={id} />;
+export function ImportHoursRoute() {
+  const value = useSearchParams().get("id") ?? "";
+  return <ImportHoursPage contractorId={value} />;
 }
 
 function ImportHoursPage({ contractorId }: { contractorId: string }) {
@@ -90,7 +91,7 @@ function ImportFlow({ contractor }: { contractor: Contractor }) {
         r.importHistoricalHours({ contractorId: contractor.id, fileName: file.name, csvText: file.text, includeDuplicateLines: keepDuplicates }, today),
       );
       notify(`Imported ${batch.importedCount} entries (${formatHours(batch.importedMinutes)}) for ${contractor.name}. Nothing new is owed.`);
-      router.push(`/contractors/${contractor.id}`);
+      router.push(routes.contractor(contractor.id));
     } catch (err) {
       setSaveError(err instanceof DomainError ? err.message : "The import could not be saved. Nothing was changed.");
       setSaving(false);
@@ -102,7 +103,7 @@ function ImportFlow({ contractor }: { contractor: Contractor }) {
 
   return (
     <>
-      <BackLink href={`/contractors/${contractor.id}`} label={contractor.name} />
+      <BackLink href={routes.contractor(contractor.id)} label={contractor.name} />
       <PageHeader
         title="Import historical hours"
         description={`Add past hours to ${contractor.name}'s record. Imported hours count toward lifetime hours and earnings but never create amounts owed.`}

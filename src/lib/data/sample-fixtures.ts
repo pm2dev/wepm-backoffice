@@ -4,6 +4,9 @@
  * production data. Built through the real domain functions so finalized
  * records and payments are internally consistent.
  */
+import { markInvoiced } from "@/lib/domain/billing";
+import { recordInvoiceReceipt } from "@/lib/domain/cashflow";
+import { listCharges, setChargeAmount, setChargesPaid } from "@/lib/domain/expenses";
 import { finalizePayroll, recordPayment, draftKey, addAdjustment, type IdFactory } from "@/lib/domain/payroll";
 import type { BackofficeData, TimeEntry, TimeException } from "@/lib/domain/types";
 
@@ -49,7 +52,7 @@ function entries(
 export function buildSampleData(): BackofficeData {
   const id = sequentialIds();
   let data: BackofficeData = {
-    schemaVersion: 2,
+    schemaVersion: 5,
     contractors: [
       {
         id: "c_maya",
@@ -101,11 +104,23 @@ export function buildSampleData(): BackofficeData {
       { id: "rate_sam_1", contractorId: "c_sam", effectiveDate: "2024-01-01", hourlyRateCents: 3000 },
       // Priya intentionally has no rate yet — demonstrates the missing-rate state.
     ],
-    projects: [
-      { id: "p_acme", name: "Member portal", customerName: "Acme Corp (sample)", billable: true, wepmProjectId: "wepm_p_201" },
-      { id: "p_northwind", name: "Data migration", customerName: "Northwind (sample)", billable: true, wepmProjectId: "wepm_p_202" },
-      { id: "p_internal", name: "Internal operations", billable: false, wepmProjectId: "wepm_p_200" },
+    customers: [
+      { id: "cust_acme", name: "Acme Corp (sample)", billingCadence: "monthly", quickbooksCustomerId: "QB-1042", notes: "Invoices go to accounts payable; net 15." },
+      { id: "cust_northwind", name: "Northwind (sample)", billingCadence: "biweekly", quickbooksCustomerId: "QB-1077" },
     ],
+    projects: [
+      {
+        id: "p_acme", name: "Member portal", customerId: "cust_acme", billable: true, billingMethod: "task",
+        // Design intentionally has no rate yet — demonstrates the missing-task-rate state.
+        taskRates: { Development: 12500, Meetings: 7500 },
+        wepmProjectId: "wepm_p_201", active: true,
+      },
+      { id: "p_northwind", name: "Data migration", customerId: "cust_northwind", billable: true, billingMethod: "hourly", hourlyRateCents: 14000, taskRates: {}, wepmProjectId: "wepm_p_202", active: true },
+      { id: "p_northwind_disc", name: "Discovery", customerId: "cust_northwind", billable: true, billingMethod: "hourly", hourlyRateCents: 15000, taskRates: {}, billingCadence: "monthly", active: true },
+      { id: "p_internal", name: "Internal operations", customerId: null, billable: false, billingMethod: "hourly", taskRates: {}, wepmProjectId: "wepm_p_200", active: true },
+    ],
+    billingRecords: [],
+    invoiceReceipts: [],
     timeEntries: [
       // Maya — Oct 5–11 and Oct 12–18 (finalized below), Oct 19–25 crosses her Oct 21 raise
       ...entries("c_maya", "wepm_ts_m1005", "2026-10-12", [
@@ -173,7 +188,36 @@ export function buildSampleData(): BackofficeData {
       { id: "harvest_2025_03", contractorId: "c_maya", fileName: "maya-harvest-2025-03.csv", format: "harvest", importedOn: "2026-10-10", rowCount: 2, importedCount: 2, skippedInvalid: 0, skippedDuplicates: 0, importedMinutes: 13 * 60, firstWorkDate: "2025-03-04", lastWorkDate: "2025-03-05" },
       { id: "harvest_2026_08", contractorId: "c_sam", fileName: "sam-harvest-aug-2026.csv", format: "harvest", importedOn: "2026-10-10", rowCount: 2, importedCount: 2, skippedInvalid: 0, skippedDuplicates: 0, importedMinutes: 16 * 60, firstWorkDate: "2026-08-24", lastWorkDate: "2026-08-25" },
     ],
+    paymentAccounts: [
+      { id: "acct_chase", kind: "card", nickname: "Chase business card", last4: "1234" },
+      { id: "acct_amex", kind: "card", nickname: "Amex Blue Business", last4: "3005" },
+      { id: "acct_checking", kind: "bank", nickname: "Business checking" },
+    ],
+    expenses: [
+      { id: "exp_gws", vendor: "Google Workspace", type: "subscription", projectId: null, frequency: "monthly", firstDueDate: "2026-05-05", amountKind: "fixed", amountCents: 3600, autopay: true, accountId: "acct_chase", createdOn: "2026-05-01" },
+      { id: "exp_figma", vendor: "Figma", type: "subscription", projectId: "p_acme", frequency: "monthly", firstDueDate: "2026-06-12", amountKind: "fixed", amountCents: 4500, autopay: true, accountId: "acct_chase", notes: "Two editor seats for the member portal.", createdOn: "2026-06-10" },
+      { id: "exp_adobe", vendor: "Adobe Creative Cloud", type: "subscription", projectId: null, frequency: "annual", firstDueDate: "2025-11-20", amountKind: "fixed", amountCents: 65988, autopay: true, accountId: "acct_amex", createdOn: "2025-11-01" },
+      { id: "exp_aws", vendor: "AWS", type: "bill", projectId: "p_northwind", frequency: "monthly", firstDueDate: "2026-06-03", amountKind: "variable", amountCents: 12000, autopay: true, accountId: "acct_amex", notes: "Usage-based; estimate is a recent average.", createdOn: "2026-06-01" },
+      { id: "exp_internet", vendor: "Office internet", type: "bill", projectId: null, frequency: "monthly", firstDueDate: "2026-06-15", amountKind: "variable", amountCents: 8500, autopay: false, accountId: "acct_checking", createdOn: "2026-06-01" },
+      { id: "exp_insurance", vendor: "Business liability insurance", type: "bill", projectId: null, frequency: "quarterly", firstDueDate: "2026-01-10", amountKind: "fixed", amountCents: 31000, autopay: false, accountId: "acct_checking", createdOn: "2026-01-02" },
+      { id: "exp_domain", vendor: "wepmlabs.com renewal", type: "bill", projectId: null, frequency: "one_time", firstDueDate: "2026-11-08", amountKind: "fixed", amountCents: 1999, autopay: false, accountId: "acct_chase", createdOn: "2026-10-01" },
+      { id: "exp_notion", vendor: "Notion", type: "subscription", projectId: null, frequency: "monthly", firstDueDate: "2026-05-20", endDate: "2026-09-30", amountKind: "fixed", amountCents: 2000, autopay: true, accountId: "acct_chase", notes: "Cancelled in September.", createdOn: "2026-05-15" },
+    ],
+    expenseCharges: [],
   };
+
+  // Bills: everything through September verified paid, plus some October items.
+  const actuals: [string, number][] = [
+    ["exp_aws~2026-06-03", 11842], ["exp_aws~2026-07-03", 12510], ["exp_aws~2026-08-03", 11977], ["exp_aws~2026-09-03", 12230], ["exp_aws~2026-10-03", 13142],
+    ["exp_internet~2026-06-15", 8499], ["exp_internet~2026-07-15", 8499], ["exp_internet~2026-08-15", 8499], ["exp_internet~2026-10-15", 9120],
+  ];
+  for (const [key, cents] of actuals) data = setChargeAmount(data, key, cents, id);
+  for (const c of listCharges(data, "2026-09-30")) {
+    if (c.key === "exp_internet~2026-09-15") continue; // September internet still unpaid → carryover
+    data = setChargesPaid(data, [c.key], c.dueDate, id);
+  }
+  data = setChargesPaid(data, ["exp_figma~2026-10-12", "exp_aws~2026-10-03", "exp_insurance~2026-10-10"], "2026-10-28", id);
+  // Google Workspace (autopay) for October is intentionally left unconfirmed.
 
   // Finalize and pay earlier weeks as they would have happened.
   const fin = (contractorId: string, start: string, on: string) => {
@@ -226,6 +270,15 @@ export function buildSampleData(): BackofficeData {
     receivedOn: "2026-10-27",
   };
   data = { ...data, timeExceptions: [exception] };
+
+  // Billing: the first October week was invoiced in QuickBooks and marked here.
+  data = markInvoiced(data, { projectId: "p_acme", through: "2026-10-11", invoicedOn: "2026-10-12", quickbooksInvoiceRef: "INV-2026-031" }, id).data;
+  data = markInvoiced(data, { projectId: "p_northwind", through: "2026-10-11", invoicedOn: "2026-10-12", quickbooksInvoiceRef: "INV-2026-032" }, id).data;
+
+  // Cash flow: QuickBooks payments received for those invoices.
+  const inv = (ref: string) => data.billingRecords.find((r) => r.quickbooksInvoiceRef === ref)!;
+  data = recordInvoiceReceipt(data, { externalPaymentId: "qbo-pmt-5521", customerId: "cust_northwind", quickbooksCustomerId: "QB-1077", invoiceRef: "INV-2026-032", amountCents: inv("INV-2026-032").amountCents, receivedOn: "2026-10-27" }, id).data;
+  data = recordInvoiceReceipt(data, { externalPaymentId: "qbo-pmt-5538", customerId: "cust_acme", quickbooksCustomerId: "QB-1042", invoiceRef: "INV-2026-031", amountCents: 150000, receivedOn: "2026-10-30" }, id).data;
 
   return data;
 }

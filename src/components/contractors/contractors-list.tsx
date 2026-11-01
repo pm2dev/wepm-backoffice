@@ -1,5 +1,6 @@
 "use client";
 
+import { routes } from "@/lib/routes";
 import { ChevronRight, Plus } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -51,7 +52,7 @@ export function ContractorsListPage() {
                 {visible.map(({ c, active, stats }) => (
                   <li key={c.id}>
                     <Link
-                      href={`/contractors/${c.id}`}
+                      href={routes.contractor(c.id)}
                       className="flex items-center gap-3 p-4 hover:bg-slate-50 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-blue-600"
                     >
                       <div className="flex min-w-0 flex-1 flex-col gap-3 lg:flex-row lg:items-center">
@@ -96,7 +97,7 @@ export function ContractorsListPage() {
 
 function AddContractorDialog() {
   const [open, setOpen] = useState(false);
-  const { mutate } = useBackoffice();
+  const { mutate, today } = useBackoffice();
   const notify = useNotice();
   const router = useRouter();
   return (
@@ -112,10 +113,10 @@ function AddContractorDialog() {
           <ContractorForm
             submitLabel="Add contractor"
             onSubmit={async (input) => {
-              const c = await mutate((r) => r.addContractor(input));
+              const c = await mutate((r) => r.addContractor(input, today));
               notify(`${c.name} added.`);
               setOpen(false);
-              router.push(`/contractors/${c.id}`);
+              router.push(routes.contractor(c.id));
             }}
           />
         </DialogContent>

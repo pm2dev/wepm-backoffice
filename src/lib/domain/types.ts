@@ -44,12 +44,51 @@ export type ContractorRate = {
   hourlyRateCents: Cents;
 };
 
+export type BillingCadence = "weekly" | "biweekly" | "semimonthly" | "monthly";
+
+/** Manually maintained customer (PRD §10). */
+export type Customer = {
+  id: string;
+  name: string;
+  /** Default billing cadence; a project may override it. Informational for now (PRD §19.5). */
+  billingCadence: BillingCadence;
+  /** QuickBooks customer identity, for the Slashbin mapping. */
+  quickbooksCustomerId?: string;
+  notes?: string;
+};
+
 export type Project = {
   id: string;
   name: string;
-  customerName?: string;
+  /** null = internal project owned by the business. */
+  customerId: string | null;
+  /** One setting per project. Nonbillable time is still paid to contractors. */
   billable: boolean;
+  /** "hourly" = one flat rate; "task" = a rate per task. */
+  billingMethod: "hourly" | "task";
+  hourlyRateCents?: Cents;
+  /** Task name → billing rate (task method). */
+  taskRates: Record<string, Cents>;
+  billingCadence?: BillingCadence;
   wepmProjectId?: string;
+  active: boolean;
+};
+
+/** A billing line preserved when hours are marked invoiced. */
+export type BillingLine = { task: string; minutes: number; rateCents: Cents; amountCents: Cents };
+
+/** Hours the owner marked invoiced after creating the invoice in QuickBooks. */
+export type BillingRecord = {
+  id: string;
+  projectId: string;
+  customerId: string;
+  entryIds: string[];
+  firstWorkDate: ISODate;
+  lastWorkDate: ISODate;
+  lines: BillingLine[];
+  amountCents: Cents;
+  invoicedOn: ISODate;
+  quickbooksInvoiceRef?: string;
 };
 
 export type TimeEntrySource = "wepm" | "harvest_import" | "workbook_import";
@@ -171,8 +210,73 @@ export type PaymentRecord = {
   recordedOn: ISODate;
 };
 
+// ---------------------------------------------------------------------------
+// Bills & subscriptions (PRD §9)
+// ---------------------------------------------------------------------------
+
+/** A card or bank account charges are paid from. Never a full card number. */
+export type PaymentAccount = {
+  id: string;
+  kind: "card" | "bank";
+  nickname: string;
+  /** Cards only, optional. */
+  last4?: string;
+};
+
+export type ExpenseFrequency = "monthly" | "quarterly" | "annual" | "one_time";
+
+export type RecurringExpense = {
+  id: string;
+  vendor: string;
+  type: "bill" | "subscription";
+  /** null = the company; otherwise exactly one project (no splitting). */
+  projectId: string | null;
+  frequency: ExpenseFrequency;
+  /** Anchor due/renewal date; later charges keep its day of month. */
+  firstDueDate: ISODate;
+  /** Charges before this date come from an earlier version of the schedule and are stored explicitly. */
+  scheduleFrom?: ISODate;
+  /** Last date a charge may fall on (stopped/cancelled). */
+  endDate?: ISODate;
+  amountKind: "fixed" | "variable";
+  /** Fixed amount, or the planning estimate for variable amounts. */
+  amountCents: Cents;
+  autopay: boolean;
+  accountId: string;
+  notes?: string;
+  createdOn: ISODate;
+};
+
+/**
+ * One occurrence of an expense, stored once something is recorded about it
+ * (paid, actual amount) or when its schedule changes. Unstored occurrences
+ * are generated from the schedule.
+ */
+export type ExpenseCharge = {
+  id: string;
+  expenseId: string;
+  dueDate: ISODate;
+  amountCents: Cents;
+  isEstimate: boolean;
+  paidOn?: ISODate;
+};
+
+/** A customer invoice payment received in QuickBooks (delivered via Slashbin). */
+export type InvoiceReceipt = {
+  id: string;
+  /** QuickBooks payment identity — dedupe key. */
+  externalPaymentId: string;
+  customerId: string | null;
+  quickbooksCustomerId?: string;
+  invoiceRef?: string;
+  amountCents: Cents;
+  receivedOn: ISODate;
+  /** Prototype-only receipts entered by hand are labeled as such. */
+  simulated?: boolean;
+};
+
 export type BackofficeData = {
-  schemaVersion: 2;
+  schemaVersion: 5;
   contractors: Contractor[];
   rates: ContractorRate[];
   projects: Project[];
@@ -182,4 +286,10 @@ export type BackofficeData = {
   adjustments: Adjustment[];
   payments: PaymentRecord[];
   importBatches: ImportBatch[];
+  paymentAccounts: PaymentAccount[];
+  expenses: RecurringExpense[];
+  expenseCharges: ExpenseCharge[];
+  customers: Customer[];
+  billingRecords: BillingRecord[];
+  invoiceReceipts: InvoiceReceipt[];
 };

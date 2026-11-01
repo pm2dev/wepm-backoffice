@@ -7,10 +7,10 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/", label: "Overview", icon: Gauge, ready: false },
   { href: "/payroll", label: "Payroll", icon: Banknote, ready: true },
   { href: "/contractors", label: "Contractors", icon: Users, ready: true },
-  { href: "/bills", label: "Bills & subscriptions", icon: Receipt, ready: false },
-  { href: "/customers", label: "Customers", icon: Building2, ready: false },
-  { href: "/projects", label: "Projects & billing", icon: Briefcase, ready: false },
-  { href: "/cash-flow", label: "Cash flow", icon: CalendarClock, ready: false },
+  { href: "/bills", label: "Bills & subscriptions", icon: Receipt, ready: true },
+  { href: "/customers", label: "Customers", icon: Building2, ready: true },
+  { href: "/projects", label: "Projects & billing", icon: Briefcase, ready: true },
+  { href: "/cash-flow", label: "Cash flow", icon: CalendarClock, ready: true },
   { href: "/settings", label: "Settings", icon: Settings, ready: false },
 ];
 

@@ -71,6 +71,7 @@ export function formatDate(date: ISODate, opts: { weekday?: boolean; year?: bool
 }
 
 export function formatRange(start: ISODate, end: ISODate): string {
+  if (start === end) return formatDate(start);
   const s = toUTC(start);
   const e = toUTC(end);
   if (s.getUTCFullYear() !== e.getUTCFullYear()) {
@@ -80,4 +81,50 @@ export function formatRange(start: ISODate, end: ISODate): string {
     return `${MONTHS[s.getUTCMonth()]} ${s.getUTCDate()}–${e.getUTCDate()}, ${e.getUTCFullYear()}`;
   }
   return `${formatDate(start, { year: false })} – ${formatDate(end)}`;
+}
+
+// ---------------------------------------------------------------------------
+// Months
+// ---------------------------------------------------------------------------
+
+/** "YYYY-MM" */
+export type MonthKey = string;
+
+export function monthKey(date: ISODate): MonthKey {
+  return date.slice(0, 7);
+}
+
+export function daysInMonth(year: number, month1: number): number {
+  return new Date(Date.UTC(year, month1, 0)).getUTCDate();
+}
+
+export function monthStart(month: MonthKey): ISODate {
+  return `${month}-01`;
+}
+
+export function monthEnd(month: MonthKey): ISODate {
+  const [y, m] = month.split("-").map(Number);
+  return `${month}-${String(daysInMonth(y, m)).padStart(2, "0")}`;
+}
+
+export function addMonthsToKey(month: MonthKey, n: number): MonthKey {
+  const [y, m] = month.split("-").map(Number);
+  const total = y * 12 + (m - 1) + n;
+  return `${Math.floor(total / 12)}-${String((total % 12) + 1).padStart(2, "0")}`;
+}
+
+/**
+ * The anchor date moved by n months, keeping the anchor's day of month and
+ * clamping to the month's last day (Jan 31 → Feb 28 → Mar 31).
+ */
+export function addMonthsClamped(anchor: ISODate, n: number): ISODate {
+  const target = addMonthsToKey(monthKey(anchor), n);
+  const [y, m] = target.split("-").map(Number);
+  const day = Math.min(Number(anchor.slice(8, 10)), daysInMonth(y, m));
+  return `${target}-${String(day).padStart(2, "0")}`;
+}
+
+export function formatMonth(month: MonthKey): string {
+  const [y, m] = month.split("-").map(Number);
+  return `${["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"][m - 1]} ${y}`;
 }
