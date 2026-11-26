@@ -17,6 +17,8 @@ import { formatCents, formatHours } from "@/lib/domain/money";
 import { PROJECT_STATUS_LABELS, type BackofficeData, type Project } from "@/lib/domain/types";
 import { formatDate } from "@/lib/domain/dates";
 import { routes } from "@/lib/routes";
+import { AddProjectExpenseDialog, ProjectExpenseList } from "@/components/expenses/project-expenses";
+import { expensesFor } from "@/lib/domain/project-expenses";
 import { BreakdownCard } from "./breakdown-card";
 import { BillingRecords } from "./invoiced";
 import { billingLabel, BillingRatesCard } from "./billing-rates";
@@ -83,6 +85,13 @@ function ProjectProfile({ data, project: p }: { data: BackofficeData; project: P
           <section aria-labelledby="history-heading" className="space-y-3">
             <h2 id="history-heading" className="text-sm font-semibold uppercase tracking-wide text-slate-600">Invoiced</h2>
             <BillingRecords data={data} records={s.records} showProject={false} />
+          </section>
+          <section aria-labelledby="expenses-heading" className="space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 id="expenses-heading" className="text-sm font-semibold uppercase tracking-wide text-slate-600">Expenses</h2>
+              <AddProjectExpenseDialog data={data} projectId={p.id} />
+            </div>
+            <ProjectExpenseList data={data} expenses={expensesFor(data, p.id)} showProject={false} emptyText="No expenses on this project yet." />
           </section>
         </div>
         <section aria-labelledby="rates-heading">

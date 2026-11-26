@@ -1,6 +1,6 @@
 import type { BackofficeData } from "./types";
 
-export const SCHEMA_VERSION = 9 as const;
+export const SCHEMA_VERSION = 10 as const;
 
 /** A brand-new workspace with no records. */
 export function emptyData(): BackofficeData {
@@ -19,6 +19,7 @@ export function emptyData(): BackofficeData {
     paymentAccounts: [],
     expenses: [],
     expenseCharges: [],
+    projectExpenses: [],
     customers: [],
     billingRecords: [],
     invoiceReceipts: [],

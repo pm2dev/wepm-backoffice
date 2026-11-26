@@ -66,6 +66,19 @@ const projectInput = z.strictObject({
   costBudgetCents: cents.optional(),
 });
 
+const projectExpenseInput = z.strictObject({
+  date,
+  vendor: text(200),
+  description: text(500),
+  amountCents: cents,
+  category: z.enum(["software", "hardware", "travel", "contractor_services", "other"]),
+  projectId: id.nullable(),
+  billable: z.boolean(),
+  paidBy: z.strictObject({ kind: z.literal("account"), accountId: id }),
+  receiptUrl: text(2000).optional(),
+  notes: text(2000).optional(),
+});
+
 const noArgs = z.strictObject({});
 
 type Schemas = { [K in OperationName]: z.ZodType<OperationArgs<K>> };
@@ -114,6 +127,9 @@ export const OPERATION_SCHEMAS = {
       .strict(),
     today,
   }),
+  addProjectExpense: z.strictObject({ input: projectExpenseInput, today }),
+  updateProjectExpense: z.strictObject({ id, input: projectExpenseInput }),
+  deleteProjectExpense: z.strictObject({ id }),
   addBillingRate: z.strictObject({ input: z.strictObject({ projectId: id, task: text(120).nullable(), effectiveDate: date, rateCents: cents }) }),
   removeBillingRate: z.strictObject({ id }),
   updateProject: z.strictObject({ id, input: projectInput, today }),
