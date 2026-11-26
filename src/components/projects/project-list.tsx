@@ -12,7 +12,8 @@ import { EmptyState, ErrorState, LoadingState, PageHeader } from "@/components/u
 import { useNotice } from "@/components/layout/notice";
 import { useBackoffice } from "@/lib/data/backoffice-provider";
 import { projectSummary } from "@/lib/domain/billing";
-import { formatCents, formatHours } from "@/lib/domain/money";
+import { projectFinancials } from "@/lib/domain/financials";
+import { formatCents } from "@/lib/domain/money";
 import { PROJECT_STATUS_LABELS, type BackofficeData, type Project, type ProjectStatus } from "@/lib/domain/types";
 import { routes } from "@/lib/routes";
 import { billingLabel } from "./billing-rates";
@@ -27,6 +28,7 @@ export function ProjectRows({ data, projects }: { data: BackofficeData; projects
       <ul className="divide-y divide-slate-200">
         {projects.map((p) => {
           const s = projectSummary(data, p.id);
+          const f = projectFinancials(data, p.id, today);
           const customer = data.customers.find((c) => c.id === p.customerId);
           return (
             <li key={p.id}>
@@ -41,17 +43,25 @@ export function ProjectRows({ data, projects }: { data: BackofficeData; projects
                       {p.wepmProjectId ? null : <Badge tone="warning">No wepm.app ID</Badge>}
                     </div>
                   </div>
-                  <dl className="grid grid-cols-2 gap-x-4 text-sm lg:w-80 lg:shrink-0">
-                    <div>
-                      <dt className="text-xs text-slate-500">Approved hours</dt>
-                      <dd className="tabular font-medium">{formatHours(s.approvedMinutes)}</dd>
-                    </div>
+                  <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm sm:grid-cols-4 lg:w-[30rem] lg:shrink-0">
                     <div>
                       <dt className="text-xs text-slate-500">Uninvoiced</dt>
                       <dd className="tabular font-medium">
                         {p.billable && p.customerId ? formatCents(s.uninvoicedAmountCents) : "—"}
                         {!s.uninvoicedComplete ? <span className="text-red-700"> + unpriced</span> : null}
                       </dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs text-slate-500">Earned</dt>
+                      <dd className="tabular font-medium">{f.revenue ? formatCents(f.revenue.earnedCents) : "—"}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs text-slate-500">Cost</dt>
+                      <dd className="tabular font-medium">{formatCents(f.cost.totalCents)}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs text-slate-500">Margin</dt>
+                      <dd className={`tabular font-medium ${f.marginCents !== null && f.marginCents < 0 ? "text-red-700" : ""}`}>{f.marginCents === null ? "—" : formatCents(f.marginCents)}</dd>
                     </div>
                   </dl>
                 </div>

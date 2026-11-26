@@ -19,6 +19,7 @@ import { formatDate } from "@/lib/domain/dates";
 import { routes } from "@/lib/routes";
 import { AddProjectExpenseDialog, ProjectExpenseList } from "@/components/expenses/project-expenses";
 import { expensesFor } from "@/lib/domain/project-expenses";
+import { ProjectFinancialsSection } from "@/components/financials/project-financials";
 import { BreakdownCard } from "./breakdown-card";
 import { InvoiceDraftList } from "./invoice-draft-card";
 import { billingLabel, BillingRatesCard } from "./billing-rates";
@@ -67,11 +68,11 @@ function ProjectProfile({ data, project: p }: { data: BackofficeData; project: P
         <Stat label="Uninvoiced" value={p.billable && p.customerId ? formatCents(s.uninvoicedAmountCents) : "Not billed"} sub={s.uninvoicedMinutes ? formatHours(s.uninvoicedMinutes) : undefined} />
         <Stat label="Invoiced to date" value={formatCents(s.invoicedAmountCents)} />
         <Stat label="wepm.app project ID" value={p.wepmProjectId ?? "Not linked"} small />
-        {budgetText(p) ? <Stat label={p.customerId ? "Budget" : "Cost budget"} value={budgetText(p)!} small /> : null}
       </section>
 
       <div className="mt-8 grid gap-8 xl:grid-cols-[1fr_22rem]">
         <div className="min-w-0 space-y-8">
+          <ProjectFinancialsSection data={data} project={p} />
           {p.billable && p.customerId ? (
             <section aria-labelledby="uninvoiced-heading" className="space-y-3">
               <h2 id="uninvoiced-heading" className="text-sm font-semibold uppercase tracking-wide text-slate-600">Ready to invoice</h2>
@@ -144,8 +145,3 @@ function EditProjectDialog({ data, project }: { data: BackofficeData; project: P
   );
 }
 
-function budgetText(p: Project): string | null {
-  if (!p.customerId) return p.costBudgetCents ? formatCents(p.costBudgetCents) : null;
-  const parts = [p.budgetCents ? formatCents(p.budgetCents) : null, p.budgetMinutes ? formatHours(p.budgetMinutes) : null].filter(Boolean);
-  return parts.length ? parts.join(" · ") : null;
-}
