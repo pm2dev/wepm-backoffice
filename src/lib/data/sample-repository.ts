@@ -1,13 +1,34 @@
 import type { BackofficeData } from "@/lib/domain/types";
 import { SCHEMA_VERSION } from "@/lib/domain/empty";
 import { DomainError } from "@/lib/domain/payroll";
+import { migrateData, OLDEST_MIGRATABLE_VERSION } from "./migrations";
 import { parseOperationArgs } from "./operation-schemas";
 import { applyOperation, type OperationArgs, type OperationName, type OperationResult } from "./operations";
 import { BackofficeRepository } from "./repository";
 import { buildSampleData } from "./sample-fixtures";
 
 /** Separate namespace so demo storage can never be mistaken for real data. */
-const STORAGE_KEY = `backoffice.sample-data.v${SCHEMA_VERSION}`;
+const storageKey = (version: number) => `backoffice.sample-data.v${version}`;
+const STORAGE_KEY = storageKey(SCHEMA_VERSION);
+
+/**
+ * Find this browser's saved sample data, upgrading it if it was saved by an
+ * older build. Data too old to upgrade, or unreadable, is ignored.
+ */
+function readSaved(storage: Storage): { data: BackofficeData; fromKey: string } | null {
+  for (let v = SCHEMA_VERSION; v >= OLDEST_MIGRATABLE_VERSION; v--) {
+    const key = storageKey(v);
+    const raw = storage.getItem(key);
+    if (!raw) continue;
+    try {
+      const parsed = JSON.parse(raw) as { schemaVersion?: unknown };
+      return { data: migrateData(parsed, Number(parsed.schemaVersion)).data, fromKey: key };
+    } catch {
+      /* unreadable or not upgradable: try older saves, then fresh sample data */
+    }
+  }
+  return null;
+}
 
 /**
  * Frontend-prototype repository: sample data persisted in localStorage.
@@ -20,16 +41,12 @@ export class SampleRepository extends BackofficeRepository {
 
   async load(): Promise<BackofficeData> {
     if (this.data) return this.data;
-    const raw = typeof window !== "undefined" ? window.localStorage.getItem(STORAGE_KEY) : null;
-    if (raw) {
-      try {
-        const parsed = JSON.parse(raw) as BackofficeData;
-        if (parsed.schemaVersion === SCHEMA_VERSION) return (this.data = parsed);
-      } catch {
-        /* fall through to fresh sample data */
-      }
-    }
-    return this.commit(buildSampleData());
+    const saved = typeof window !== "undefined" ? readSaved(window.localStorage) : null;
+    if (!saved) return this.commit(buildSampleData());
+    if (saved.fromKey === STORAGE_KEY) return (this.data = saved.data);
+    this.commit(saved.data);
+    window.localStorage.removeItem(saved.fromKey);
+    return saved.data;
   }
 
   private commit(next: BackofficeData): BackofficeData {

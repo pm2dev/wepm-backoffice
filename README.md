@@ -71,6 +71,8 @@ Pages talk only to `BackofficeRepository`. `SampleRepository` (GitHub Pages) and
 
 **Storage (stage 1):** Postgres holds the business data as one versioned JSON document (`Workspace`), plus an append-only change log (`WorkspaceEvent`). Each change locks the row, applies the operation, and writes the new version and the log entry in one transaction, so concurrent changes can't overwrite each other. Splitting into per-entity tables can happen before production without changing the API.
 
+**Schema changes:** when the shape of the business data changes, bump `SCHEMA_VERSION` (`src/lib/domain/empty.ts`) and add a migration to `MIGRATIONS` in `src/lib/data/migrations.ts`. The Postgres store upgrades older data the first time it's read, inside the row lock, and logs a `migrate` event. The sample store upgrades this browser's saved copy. Data newer than the build is refused.
+
 ## Rules encoded (and temporary assumptions)
 
 - Money is integer cents. Pay = round-half-up(minutes × rate ÷ 60), **once per rate segment** of a payroll record. *(Explicit rule; confirm.)*
