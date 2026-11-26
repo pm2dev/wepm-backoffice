@@ -30,6 +30,34 @@ export const MIGRATIONS: Migration[] = [
       projects: ((d.projects as StoredDocument[] | undefined) ?? []).map(({ active, ...p }) => ({ ...p, status: active === false ? "completed" : "active" })),
     }),
   },
+  {
+    from: 8,
+    description: "Billing rates become dated rows (`billingRates`), each effective from the project's start or earliest time entry.",
+    up: (d) => {
+      const entries = ((d.timeEntries as StoredDocument[] | undefined) ?? []) as { projectId?: string | null; workDate?: string }[];
+      const earliest = new Map<string, string>();
+      for (const e of entries) {
+        if (!e.projectId || !e.workDate) continue;
+        const cur = earliest.get(e.projectId);
+        if (!cur || e.workDate < cur) earliest.set(e.projectId, e.workDate);
+      }
+      const billingRates: StoredDocument[] = [];
+      const projects = ((d.projects as StoredDocument[] | undefined) ?? []).map(({ hourlyRateCents, taskRates, ...p }) => {
+        const id = String(p.id);
+        const candidates = [earliest.get(id), typeof p.startDate === "string" ? p.startDate : undefined].filter((x): x is string => !!x).sort();
+        // No start date and no hours: the rate has always applied, as it did before.
+        const effectiveDate = candidates[0] ?? "2000-01-01";
+        let n = 0;
+        const add = (task: string | null, rateCents: unknown) => {
+          if (typeof rateCents === "number" && rateCents > 0) billingRates.push({ id: `brate_${id}_${++n}`, projectId: id, task, effectiveDate, rateCents });
+        };
+        add(null, hourlyRateCents);
+        for (const [task, cents] of Object.entries((taskRates as Record<string, unknown> | undefined) ?? {})) add(task, cents);
+        return p;
+      });
+      return { ...d, projects, billingRates };
+    },
+  },
 ];
 
 export class MigrationError extends Error {}

@@ -70,7 +70,7 @@ export const OPERATIONS = {
     const r = billing.updateCustomer(d, a.id, a.input);
     return { data: r.data, result: r.customer };
   },
-  addProject: (d: BackofficeData, a: { input: billing.ProjectInput; today: string }) => {
+  addProject: (d: BackofficeData, a: { input: billing.NewProjectInput; today: string }) => {
     const r = billing.addProject(d, a.input, a.today);
     return { data: r.data, result: r.project };
   },
@@ -78,6 +78,11 @@ export const OPERATIONS = {
     const r = billing.updateProject(d, a.id, a.input, a.today);
     return { data: r.data, result: r.project };
   },
+  addBillingRate: (d: BackofficeData, a: { input: billing.BillingRateInput }) => {
+    const r = billing.addBillingRate(d, a.input);
+    return { data: r.data, result: r.rate };
+  },
+  removeBillingRate: (d: BackofficeData, a: { id: string }) => unit(billing.removeBillingRate(d, a.id)),
   markInvoiced: (d: BackofficeData, a: { input: Parameters<typeof billing.markInvoiced>[1] }) => {
     const r = billing.markInvoiced(d, a.input);
     return { data: r.data, result: r.record };

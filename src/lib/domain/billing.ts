@@ -2,7 +2,7 @@ import { compareDates, isISODate, type ISODate } from "./dates";
 import { ingestApprovedTime } from "./ingest";
 import { payForMinutes, type Cents } from "./money";
 import { DomainError, randomId, type IdFactory } from "./payroll";
-import type { BackofficeData, BillingCadence, BillingLine, BillingRecord, Customer, Project, ProjectStatus, TimeEntry } from "./types";
+import type { BackofficeData, BillingCadence, BillingLine, BillingRate, BillingRecord, Customer, Project, ProjectStatus, TimeEntry } from "./types";
 
 export const CADENCE_LABEL: Record<BillingCadence, string> = {
   weekly: "Weekly",
@@ -60,13 +60,6 @@ function validateProject(data: BackofficeData, input: ProjectInput, selfId?: str
   if (!input.name.trim()) e.name = "Enter the project name.";
   if (input.customerId && !data.customers.some((c) => c.id === input.customerId)) e.customerId = "Choose a customer or Internal.";
   if (input.billable && !input.customerId) e.billable = "Internal projects can't be billable — choose a customer first.";
-  if (input.billable && input.billingMethod === "hourly" && input.hourlyRateCents !== undefined && (!Number.isSafeInteger(input.hourlyRateCents) || input.hourlyRateCents <= 0)) {
-    e.hourlyRateCents = "Enter an hourly billing rate greater than $0.";
-  }
-  for (const [task, cents] of Object.entries(input.taskRates)) {
-    if (!task.trim()) e.taskRates = "Every task rate needs a task name.";
-    else if (!Number.isSafeInteger(cents) || cents <= 0) e.taskRates = `Enter a rate greater than $0 for “${task}”.`;
-  }
   const wepm = input.wepmProjectId?.trim();
   if (wepm && data.projects.some((p) => p.id !== selfId && p.wepmProjectId === wepm)) e.wepmProjectId = "Another project already uses this wepm.app ID.";
   if (!PROJECT_STATUSES.includes(input.status)) e.status = "Choose a status.";
@@ -84,16 +77,12 @@ function validateProject(data: BackofficeData, input: ProjectInput, selfId?: str
 const PROJECT_STATUSES: ProjectStatus[] = ["active", "on_hold", "completed"];
 
 function normalizeProject(input: ProjectInput): ProjectInput {
-  const taskRates: Record<string, Cents> = {};
-  for (const [t, c] of Object.entries(input.taskRates ?? {})) if (t.trim()) taskRates[t.trim()] = c;
   // Explicit fields only — never copy unknown keys from input.
   return {
     name: input.name.trim(),
     customerId: input.customerId || null,
     billable: !!input.billable,
     billingMethod: input.billingMethod,
-    hourlyRateCents: input.hourlyRateCents,
-    taskRates,
     billingCadence: input.billingCadence,
     wepmProjectId: input.wepmProjectId?.trim() || undefined,
     status: input.status,
@@ -106,11 +95,80 @@ function normalizeProject(input: ProjectInput): ProjectInput {
   };
 }
 
+/** A new project can start with billing rates, all effective from `ratesFrom` (default: its start date, else today). */
+export type NewProjectInput = ProjectInput & { initialRates?: { task: string | null; rateCents: Cents }[]; ratesFrom?: ISODate };
+
 /** Adding a wepm.app project ID can resolve held-back time entries, so exceptions are re-checked. */
-export function addProject(data: BackofficeData, input: ProjectInput, today: ISODate, newId: IdFactory = randomId) {
+export function addProject(data: BackofficeData, input: NewProjectInput, today: ISODate, newId: IdFactory = randomId) {
   validateProject(data, input);
+  const effectiveDate = input.ratesFrom || input.startDate || today;
+  const initial = (input.initialRates ?? []).map((r) => ({ task: r.task === null ? null : r.task.trim(), rateCents: r.rateCents }));
+  const e: Record<string, string> = {};
+  if (initial.length && (!input.billable || !input.customerId)) e.billable = "Only billable customer projects have billing rates.";
+  if (initial.length && !isISODate(effectiveDate)) e.ratesFrom = "Enter the date these rates start.";
+  for (const r of initial) {
+    if (r.task === "") e.rates = "Every rate needs a task name.";
+    else if (!Number.isSafeInteger(r.rateCents) || r.rateCents <= 0) e.rates = `Enter a rate greater than $0${r.task ? ` for “${r.task}”` : ""}.`;
+  }
+  if (new Set(initial.map((r) => r.task)).size !== initial.length) e.rates = "Each task can have only one starting rate.";
+  if (Object.keys(e).length) throw new FormError(e);
   const project: Project = { ...normalizeProject(input), id: newId("p") };
-  return { data: reprocessExceptions({ ...data, projects: [...data.projects, project] }, today, newId).data, project };
+  const rates: BillingRate[] = initial.map((r) => ({ id: newId("brate"), projectId: project.id, task: r.task, effectiveDate, rateCents: r.rateCents }));
+  return { data: reprocessExceptions({ ...data, projects: [...data.projects, project], billingRates: [...data.billingRates, ...rates] }, today, newId).data, project };
+}
+
+// ---------------------------------------------------------------------------
+// Billing rates (effective-dated, ADR-0003)
+// ---------------------------------------------------------------------------
+
+/** The billing rate on a work date, or null when none covers it — never $0, never "today's rate". */
+export function billingRateOn(rates: BillingRate[], project: Project, task: string, workDate: ISODate): Cents | null {
+  const key = project.billingMethod === "hourly" ? null : task;
+  let best: BillingRate | null = null;
+  for (const r of rates) {
+    if (r.projectId !== project.id || r.task !== key || r.effectiveDate > workDate) continue;
+    if (!best || r.effectiveDate > best.effectiveDate) best = r;
+  }
+  return best ? best.rateCents : null;
+}
+
+/** A project's rates for its current billing method, newest first within each task. */
+export function billingRateHistory(data: BackofficeData, projectId: string): BillingRate[] {
+  const project = data.projects.find((p) => p.id === projectId);
+  if (!project) return [];
+  return data.billingRates
+    .filter((r) => r.projectId === projectId && (project.billingMethod === "hourly" ? r.task === null : r.task !== null))
+    .sort((a, b) => (a.task ?? "").localeCompare(b.task ?? "") || (a.effectiveDate < b.effectiveDate ? 1 : -1));
+}
+
+/** The rate in effect today for each task (or the one hourly rate). */
+export function currentBillingRate(data: BackofficeData, project: Project, task: string | null, today: ISODate): Cents | null {
+  return billingRateOn(data.billingRates, project, task ?? "", today);
+}
+
+export type BillingRateInput = { projectId: string; task: string | null; effectiveDate: ISODate; rateCents: Cents };
+
+export function addBillingRate(data: BackofficeData, input: BillingRateInput, newId: IdFactory = randomId): { data: BackofficeData; rate: BillingRate } {
+  const project = data.projects.find((p) => p.id === input.projectId);
+  if (!project) throw new DomainError("Project not found.");
+  if (!project.billable || !project.customerId) throw new DomainError("Only billable customer projects have billing rates.");
+  const task = project.billingMethod === "hourly" ? null : (input.task ?? "").trim();
+  const e: Record<string, string> = {};
+  if (task === "") e.task = "Enter the task this rate is for.";
+  if (!isISODate(input.effectiveDate)) e.effectiveDate = "Enter the date this rate starts.";
+  else if (data.billingRates.some((r) => r.projectId === project.id && r.task === task && r.effectiveDate === input.effectiveDate)) {
+    e.effectiveDate = task ? `A rate for ${task} already starts on this date.` : "A rate already starts on this date.";
+  }
+  if (!Number.isSafeInteger(input.rateCents) || input.rateCents <= 0) e.rateCents = "Enter a rate greater than $0.";
+  if (Object.keys(e).length) throw new FormError(e);
+  const rate: BillingRate = { id: newId("brate"), projectId: project.id, task, effectiveDate: input.effectiveDate, rateCents: input.rateCents };
+  return { data: { ...data, billingRates: [...data.billingRates, rate] }, rate };
+}
+
+/** Remove a mistaken rate. Invoiced lines keep the rate they were billed at. */
+export function removeBillingRate(data: BackofficeData, id: string): BackofficeData {
+  if (!data.billingRates.some((r) => r.id === id)) throw new DomainError("Billing rate not found.");
+  return { ...data, billingRates: data.billingRates.filter((r) => r.id !== id) };
 }
 
 export function updateProject(data: BackofficeData, id: string, input: ProjectInput, today: ISODate, newId: IdFactory = randomId) {
@@ -156,12 +214,7 @@ export function uninvoicedEntries(data: BackofficeData, through?: ISODate): Time
   );
 }
 
-export function billingRateFor(project: Project, task: string): Cents | null {
-  if (project.billingMethod === "hourly") return project.hourlyRateCents ?? null;
-  return project.taskRates[task] ?? null;
-}
-
-export type BreakdownLine = { task: string; minutes: number; rateCents: Cents | null; amountCents: Cents | null; entryCount: number };
+export type BreakdownLine = { task: string; minutes: number; rateCents: Cents | null; amountCents: Cents | null; entryCount: number; firstWorkDate: ISODate; lastWorkDate: ISODate };
 
 export type ProjectBreakdown = {
   project: Project;
@@ -192,17 +245,24 @@ export function billingBreakdown(data: BackofficeData, through?: ISODate): Custo
   const projectBreakdowns: ProjectBreakdown[] = [];
   for (const [projectId, list] of byProject) {
     const project = data.projects.find((p) => p.id === projectId)!;
-    const byTask = new Map<string, TimeEntry[]>();
-    for (const e of list) byTask.set(e.task, [...(byTask.get(e.task) ?? []), e]);
-    const lines: BreakdownLine[] = [...byTask.entries()]
-      .map(([task, es]) => {
+    // One line per task and rate: a rate change inside the period splits the task's hours.
+    const byLine = new Map<string, { task: string; rate: Cents | null; entries: TimeEntry[] }>();
+    for (const e of list) {
+      const rate = billingRateOn(data.billingRates, project, e.task, e.workDate);
+      const key = `${e.task}\u0000${rate ?? "none"}`;
+      const line = byLine.get(key) ?? { task: e.task, rate, entries: [] };
+      line.entries.push(e);
+      byLine.set(key, line);
+    }
+    const lines: BreakdownLine[] = [...byLine.values()]
+      .map(({ task, rate, entries: es }) => {
         const minutes = es.reduce((s, e) => s + e.minutes, 0);
-        const rate = billingRateFor(project, task);
-        return { task, minutes, rateCents: rate, amountCents: rate === null ? null : payForMinutes(minutes, rate), entryCount: es.length };
+        const dates = es.map((e) => e.workDate).sort(compareDates);
+        return { task, minutes, rateCents: rate, amountCents: rate === null ? null : payForMinutes(minutes, rate), entryCount: es.length, firstWorkDate: dates[0], lastWorkDate: dates[dates.length - 1] };
       })
-      .sort((a, b) => a.task.localeCompare(b.task));
+      .sort((a, b) => a.task.localeCompare(b.task) || compareDates(a.firstWorkDate, b.firstWorkDate));
     const dates = list.map((e) => e.workDate).sort(compareDates);
-    const missing = lines.filter((l) => l.rateCents === null).map((l) => l.task);
+    const missing = [...new Set(lines.filter((l) => l.rateCents === null).map((l) => l.task))];
     projectBreakdowns.push({
       project,
       entries: list.sort((a, b) => compareDates(a.workDate, b.workDate)),
@@ -281,7 +341,7 @@ export function projectSummary(data: BackofficeData, projectId: string) {
 /** Distinct task names used on a project (for setting task rates). */
 export function projectTasks(data: BackofficeData, projectId: string): string[] {
   const p = data.projects.find((x) => x.id === projectId);
-  const tasks = new Set<string>(Object.keys(p?.taskRates ?? {}));
+  const tasks = new Set<string>(data.billingRates.filter((r) => r.projectId === p?.id && r.task !== null).map((r) => r.task!));
   for (const e of data.timeEntries) if (e.projectId === projectId) tasks.add(e.task);
   return [...tasks].sort();
 }

@@ -12,14 +12,14 @@ import { EmptyState, ErrorState, LoadingState, PageHeader } from "@/components/u
 import { useNotice } from "@/components/layout/notice";
 import { BackLink } from "@/components/payroll/back-link";
 import { useBackoffice } from "@/lib/data/backoffice-provider";
-import { billingBreakdown, CADENCE_LABEL, projectSummary, projectTasks } from "@/lib/domain/billing";
+import { billingBreakdown, CADENCE_LABEL, projectSummary } from "@/lib/domain/billing";
 import { formatCents, formatHours } from "@/lib/domain/money";
 import { PROJECT_STATUS_LABELS, type BackofficeData, type Project } from "@/lib/domain/types";
 import { formatDate } from "@/lib/domain/dates";
 import { routes } from "@/lib/routes";
 import { BreakdownCard } from "./breakdown-card";
 import { BillingRecords } from "./invoiced";
-import { billingLabel } from "./project-list";
+import { billingLabel, BillingRatesCard } from "./billing-rates";
 import { ProjectForm } from "./project-form";
 
 export function ProjectProfileRoute() {
@@ -40,10 +40,10 @@ export function ProjectProfileRoute() {
 }
 
 function ProjectProfile({ data, project: p }: { data: BackofficeData; project: Project }) {
+  const { today } = useBackoffice();
   const customer = data.customers.find((c) => c.id === p.customerId);
   const s = projectSummary(data, p.id);
   const breakdown = billingBreakdown(data).flatMap((c) => c.projects).find((b) => b.project.id === p.id);
-  const tasks = projectTasks(data, p.id);
   const cadence = p.billingCadence ?? customer?.billingCadence;
   return (
     <>
@@ -54,7 +54,7 @@ function ProjectProfile({ data, project: p }: { data: BackofficeData; project: P
         actions={<EditProjectDialog data={data} project={p} />}
       />
       <div className="mb-6 flex flex-wrap gap-1.5">
-        <Badge tone={p.billable && p.customerId ? "info" : "neutral"}>{billingLabel(p)}</Badge>
+        <Badge tone={p.billable && p.customerId ? "info" : "neutral"}>{billingLabel(data, p, today)}</Badge>
         <Badge tone={p.status === "active" ? "success" : p.status === "on_hold" ? "warning" : "neutral"}>{PROJECT_STATUS_LABELS[p.status]}</Badge>
         {p.startDate || p.endDate ? <Badge>{p.startDate ? formatDate(p.startDate, { year: true }) : "No start date"} – {p.endDate ? formatDate(p.endDate, { year: true }) : "ongoing"}</Badge> : null}
         {cadence && p.billable ? <Badge>{CADENCE_LABEL[cadence]} billing</Badge> : null}
@@ -87,26 +87,7 @@ function ProjectProfile({ data, project: p }: { data: BackofficeData; project: P
         </div>
         <section aria-labelledby="rates-heading">
           <h2 id="rates-heading" className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-600">Billing rates</h2>
-          <Card className="p-4 text-sm">
-            {!p.billable || !p.customerId ? (
-              <p className="text-slate-600">Not billed.</p>
-            ) : p.billingMethod === "hourly" ? (
-              <p>
-                <span className="tabular text-lg font-semibold">{p.hourlyRateCents ? `${formatCents(p.hourlyRateCents)}/h` : "No rate set"}</span>
-                <span className="block text-slate-600">for every task</span>
-              </p>
-            ) : (
-              <dl className="divide-y divide-slate-200">
-                {tasks.map((t) => (
-                  <div key={t} className="flex justify-between py-2">
-                    <dt>{t}</dt>
-                    <dd className="tabular font-medium">{p.taskRates[t] ? `${formatCents(p.taskRates[t])}/h` : <span className="text-red-700">No rate</span>}</dd>
-                  </div>
-                ))}
-              </dl>
-            )}
-            <p className="mt-3 text-xs text-slate-500">Independent of contractor pay. Rate changes apply to hours not yet invoiced; invoiced amounts are preserved.</p>
-          </Card>
+          <BillingRatesCard data={data} project={p} />
         </section>
       </div>
     </>

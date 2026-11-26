@@ -56,8 +56,6 @@ const projectInput = z.strictObject({
   customerId: id.nullable(),
   billable: z.boolean(),
   billingMethod: z.enum(["hourly", "task"]),
-  hourlyRateCents: cents.optional(),
-  taskRates: z.record(text(120), cents).refine((r) => Object.keys(r).length <= 200, "Too many task rates."),
   billingCadence: cadence.optional(),
   wepmProjectId: text(120).optional(),
   status: z.enum(["active", "on_hold", "completed"]),
@@ -110,7 +108,14 @@ export const OPERATION_SCHEMAS = {
   setChargeAmount: z.strictObject({ key: text(200), amountCents: cents }),
   addCustomer: z.strictObject({ input: customerInput }),
   updateCustomer: z.strictObject({ id, input: customerInput }),
-  addProject: z.strictObject({ input: projectInput, today }),
+  addProject: z.strictObject({
+    input: projectInput
+      .extend({ initialRates: z.array(z.strictObject({ task: text(120).nullable(), rateCents: cents })).max(200).optional(), ratesFrom: date.optional() })
+      .strict(),
+    today,
+  }),
+  addBillingRate: z.strictObject({ input: z.strictObject({ projectId: id, task: text(120).nullable(), effectiveDate: date, rateCents: cents }) }),
+  removeBillingRate: z.strictObject({ id }),
   updateProject: z.strictObject({ id, input: projectInput, today }),
   markInvoiced: z.strictObject({
     input: z.strictObject({ projectId: id, through: date.optional(), invoicedOn: date, quickbooksInvoiceRef: text(100).optional() }),

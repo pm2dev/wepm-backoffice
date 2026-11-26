@@ -4,7 +4,7 @@ import { Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select } from "@/components/ui/field";
-import { CADENCE_LABEL, FormError, projectTasks, type ProjectInput } from "@/lib/domain/billing";
+import { CADENCE_LABEL, FormError, projectTasks, type NewProjectInput } from "@/lib/domain/billing";
 import { centsToInput, parseDollars } from "@/lib/domain/money";
 import { DomainError } from "@/lib/domain/payroll";
 import { PROJECT_STATUS_LABELS, type BackofficeData, type BillingCadence, type Project, type ProjectStatus } from "@/lib/domain/types";
@@ -22,13 +22,15 @@ export function ProjectForm({
   project?: Project;
   defaultCustomerId?: string;
   submitLabel: string;
-  onSubmit: (input: ProjectInput) => Promise<void>;
+  /** New projects can include starting billing rates; edits never change rates (they're dated, managed on the project page). */
+  onSubmit: (input: NewProjectInput) => Promise<void>;
 }) {
   const [name, setName] = useState(project?.name ?? "");
   const [customerId, setCustomerId] = useState(project ? (project.customerId ?? "") : (defaultCustomerId ?? ""));
   const [billable, setBillable] = useState(project?.billable ?? true);
   const [method, setMethod] = useState<Project["billingMethod"]>(project?.billingMethod ?? "hourly");
-  const [hourly, setHourly] = useState(project?.hourlyRateCents ? centsToInput(project.hourlyRateCents) : "");
+  const [hourly, setHourly] = useState("");
+  const [ratesFrom, setRatesFrom] = useState("");
   const [cadence, setCadence] = useState<BillingCadence | "">(project?.billingCadence ?? "");
   const [wepmProjectId, setWepm] = useState(project?.wepmProjectId ?? "");
   const [status, setStatus] = useState<ProjectStatus>(project?.status ?? "active");
@@ -39,7 +41,7 @@ export function ProjectForm({
   const [costBudget, setCostBudget] = useState(project?.costBudgetCents ? centsToInput(project.costBudgetCents) : "");
   const [rows, setRows] = useState<RateRow[]>(() => {
     const tasks = project ? projectTasks(data, project.id) : [];
-    const rows = tasks.map((t) => ({ task: t, rate: project?.taskRates[t] ? centsToInput(project.taskRates[t]) : "" }));
+    const rows = tasks.map((t) => ({ task: t, rate: "" }));
     return rows.length ? rows : [{ task: "Development", rate: "" }, { task: "Meetings", rate: "" }];
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -50,21 +52,19 @@ export function ProjectForm({
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     const local: Record<string, string> = {};
-    let hourlyRateCents: number | undefined;
-    if (isBillable && method === "hourly" && hourly.trim()) {
+    const initialRates: { task: string | null; rateCents: number }[] = [];
+    if (!project && isBillable && method === "hourly" && hourly.trim()) {
       const c = parseDollars(hourly);
       if (c === null || c <= 0) local.hourlyRateCents = "Enter an hourly billing rate greater than $0.";
-      else hourlyRateCents = c;
+      else initialRates.push({ task: null, rateCents: c });
     }
-    const taskRates: Record<string, number> = {};
-    if (isBillable && method === "task") {
+    if (!project && isBillable && method === "task") {
       for (const r of rows) {
-        if (!r.task.trim() && !r.rate.trim()) continue;
         if (!r.rate.trim()) continue; // a task without a rate stays visible as "missing" in billing
         const c = parseDollars(r.rate);
-        if (c === null || c <= 0) local.taskRates = `Enter a rate greater than $0 for “${r.task || "task"}”, or leave it blank.`;
-        else if (!r.task.trim()) local.taskRates = "Every rate needs a task name.";
-        else taskRates[r.task.trim()] = c;
+        if (c === null || c <= 0) local.rates = `Enter a rate greater than $0 for “${r.task || "task"}”, or leave it blank.`;
+        else if (!r.task.trim()) local.rates = "Every rate needs a task name.";
+        else initialRates.push({ task: r.task.trim(), rateCents: c });
       }
     }
     const money = (raw: string, key: string, message: string) => {
@@ -89,8 +89,7 @@ export function ProjectForm({
         customerId: customerId || null,
         billable: isBillable,
         billingMethod: method,
-        hourlyRateCents: isBillable && method === "hourly" ? hourlyRateCents : project?.hourlyRateCents,
-        taskRates: isBillable && method === "task" ? taskRates : (project?.taskRates ?? {}),
+        ...(project ? {} : { initialRates, ratesFrom: ratesFrom || undefined }),
         billingCadence: cadence || undefined,
         wepmProjectId,
         status,
@@ -156,7 +155,12 @@ export function ProjectForm({
                 </label>
               ))}
             </div>
-            {method === "hourly" ? (
+            {project ? (
+              <p className="rounded-lg bg-slate-50 p-3 text-sm text-slate-700">
+                Billing rates have start dates. Add or change them under <strong>Billing rates</strong> on the project page.
+                {project.billingMethod !== method ? " Switching the method uses the rates set for the new method; add them there if there are none yet." : ""}
+              </p>
+            ) : method === "hourly" ? (
               <Field label="Hourly billing rate" htmlFor="pf-hourly" error={errors.hourlyRateCents} hint="Independent of what contractors are paid.">
                 <Input id="pf-hourly" inputMode="decimal" autoComplete="off" placeholder="0.00" value={hourly} onChange={(e) => setHourly(e.target.value)} className="max-w-40" aria-invalid={!!errors.hourlyRateCents} />
               </Field>
@@ -184,8 +188,13 @@ export function ProjectForm({
                 <Button variant="ghost" size="sm" onClick={() => setRows((x) => [...x, { task: "", rate: "" }])}>
                   <Plus className="size-4" aria-hidden /> Add task
                 </Button>
-                {errors.taskRates ? <p className="text-sm text-red-700" role="alert">{errors.taskRates}</p> : null}
+                {errors.rates ? <p className="text-sm text-red-700" role="alert">{errors.rates}</p> : null}
               </div>
+            )}
+            {project ? null : (
+              <Field label="Rates start (optional)" htmlFor="pf-rates-from" error={errors.ratesFrom} hint="Hours worked on or after this date use these rates. Blank uses the start date, or today.">
+                <Input id="pf-rates-from" type="date" value={ratesFrom} onChange={(e) => setRatesFrom(e.target.value)} className="max-w-48" aria-invalid={!!errors.ratesFrom} />
+              </Field>
             )}
             <Field label="Billing cadence" htmlFor="pf-cadence" hint={customer ? `Blank uses ${customer.name}'s default (${CADENCE_LABEL[customer.billingCadence].toLowerCase()}).` : undefined}>
               <Select id="pf-cadence" value={cadence} onChange={(e) => setCadence(e.target.value as BillingCadence | "")}>
