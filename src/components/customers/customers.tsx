@@ -11,7 +11,7 @@ import { EmptyState, ErrorState, LoadingState, PageHeader } from "@/components/u
 import { useNotice } from "@/components/layout/notice";
 import { BackLink } from "@/components/payroll/back-link";
 import { AddProjectDialog, ProjectRows } from "@/components/projects/project-list";
-import { BillingRecords } from "@/components/projects/invoiced";
+import { byNewest, InvoiceDraftList } from "@/components/projects/invoice-draft-card";
 import { InvoiceRows } from "@/components/cashflow/invoices";
 import { listInvoices } from "@/lib/domain/quickbooks-sync";
 import { useBackoffice } from "@/lib/data/backoffice-provider";
@@ -27,7 +27,7 @@ function customerTotals(data: BackofficeData, id: string) {
     projects: data.projects.filter((p) => p.customerId === id),
     uninvoicedCents: b?.knownAmountCents ?? 0,
     complete: b?.complete ?? true,
-    invoicedCents: data.billingRecords.filter((r) => r.customerId === id).reduce((s, r) => s + r.amountCents, 0),
+    invoicedCents: data.invoiceDrafts.filter((d) => d.customerId === id && d.status !== "draft").reduce((s, d) => s + d.amountCents, 0),
   };
 }
 
@@ -165,8 +165,8 @@ export function CustomerProfileRoute() {
       </section>
       <CustomerInvoices data={state.data} customerId={c.id} />
       <section aria-labelledby="cust-invoiced" className="mt-8 space-y-3">
-        <h2 id="cust-invoiced" className="text-sm font-semibold uppercase tracking-wide text-slate-600">Hours marked invoiced</h2>
-        <BillingRecords data={state.data} records={state.data.billingRecords.filter((r) => r.customerId === c.id).sort((a, b) => (a.invoicedOn < b.invoicedOn ? 1 : -1))} />
+        <h2 id="cust-invoiced" className="text-sm font-semibold uppercase tracking-wide text-slate-600">Invoice drafts and invoices</h2>
+        <InvoiceDraftList data={state.data} drafts={state.data.invoiceDrafts.filter((d) => d.customerId === c.id).sort(byNewest)} emptyText="No invoice drafts yet." />
       </section>
     </>
   );

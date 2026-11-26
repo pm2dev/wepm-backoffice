@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buildSampleData, SAMPLE_BUSINESS_DATE } from "@/lib/data/sample-fixtures";
-import { addBillingRate, addCustomer, addProject, billingBreakdown, billingRateOn, FormError, markInvoiced, projectSummary, removeBillingRate, removeBillingRecord, uninvoicedEntries, updateProject } from "./billing";
+import { addBillingRate, addCustomer, addProject, billingBreakdown, billingRateOn, FormError, projectSummary, removeBillingRate, uninvoicedEntries, updateProject } from "./billing";
+import { createInvoiceDraft, markDraftInvoiced, undoDraftStep } from "./invoice-drafts";
 import { computeDraftPayrolls, type IdFactory } from "./payroll";
 
 const TODAY = SAMPLE_BUSINESS_DATE;
@@ -34,21 +35,21 @@ describe("billing breakdown", () => {
     expect(acme.complete).toBe(false);
     expect(acme.missingRateTasks).toEqual(["Design"]);
     expect(acme.lines.find((l) => l.task === "Design")!.amountCents).toBeNull();
-    expect(() => markInvoiced(data, { projectId: "p_acme", invoicedOn: TODAY }, ids)).toThrow(/Design/);
+    expect(() => createInvoiceDraft(data, { projectId: "p_acme", throughDate: TODAY }, TODAY, ids)).toThrow(/Design/);
   });
 
   it("marking invoiced excludes those hours next time, without marking anything paid", () => {
     let data = buildSampleData();
     const before = find(data, "p_northwind")!;
     const paymentsBefore = data.payments.length;
-    const { data: next, record } = markInvoiced(data, { projectId: "p_northwind", invoicedOn: TODAY, quickbooksInvoiceRef: "INV-9" }, ids);
-    data = next;
-    expect(record.amountCents).toBe(before.knownAmountCents);
+    const { data: next, draft } = createInvoiceDraft(data, { projectId: "p_northwind", throughDate: TODAY }, TODAY, ids);
+    data = markDraftInvoiced(next, { draftId: draft.id, invoicedOn: TODAY, quickbooksInvoiceRef: "INV-9" });
+    expect(draft.amountCents).toBe(before.knownAmountCents);
     expect(find(data, "p_northwind")).toBeUndefined();
     expect(data.payments.length).toBe(paymentsBefore);
     expect(computeDraftPayrolls(data, TODAY).length).toBe(computeDraftPayrolls(buildSampleData(), TODAY).length);
     // Undo returns the hours to the recommendation.
-    data = removeBillingRecord(data, record.id);
+    data = undoDraftStep(undoDraftStep(data, draft.id), draft.id);
     expect(find(data, "p_northwind")!.knownAmountCents).toBe(before.knownAmountCents);
   });
 
@@ -117,7 +118,8 @@ describe("effective-dated billing rates", () => {
     expect(before.every((l) => l.lastWorkDate < "2026-10-19")).toBe(true);
     expect(after.every((l) => l.firstWorkDate >= "2026-10-19")).toBe(true);
     expect(nw.lines.every((l) => l.amountCents === Math.round((l.minutes * l.rateCents!) / 60))).toBe(true);
-    expect(nw.knownAmountCents).toBe(nw.lines.reduce((s, l) => s + l.amountCents!, 0));
+    expect(nw.knownAmountCents).toBe(nw.lines.reduce((s, l) => s + l.amountCents!, 0) + nw.expenseCents);
+    expect(nw.expenseCents).toBe(41250);
     expect(billingRateOn(data.billingRates, northwind(data), "anything", "2026-10-18")).toBe(14000);
     expect(billingRateOn(data.billingRates, northwind(data), "anything", "2026-10-19")).toBe(14500);
     expect(billingRateOn(data.billingRates, northwind(data), "anything", "2026-09-13")).toBeNull();
@@ -140,7 +142,7 @@ describe("effective-dated billing rates", () => {
     const nw = find(data, "p_northwind")!;
     expect(nw.complete).toBe(false);
     expect(nw.lines.find((l) => l.rateCents === null)!.amountCents).toBeNull();
-    expect(() => markInvoiced(data, { projectId: "p_northwind", invoicedOn: TODAY }, ids)).toThrow(/billing rate/);
+    expect(() => createInvoiceDraft(data, { projectId: "p_northwind", throughDate: TODAY }, TODAY, ids)).toThrow(/billing rate/);
   });
 
   it("validates new rates: one per task per date, greater than $0, billable projects only", () => {

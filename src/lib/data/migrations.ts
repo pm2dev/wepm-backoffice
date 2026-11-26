@@ -63,6 +63,42 @@ export const MIGRATIONS: Migration[] = [
     description: "Adds project expenses (one-off costs on a project or the company).",
     up: (d) => ({ ...d, projectExpenses: [] }),
   },
+  {
+    from: 10,
+    description: "Billing records become invoice drafts marked Invoiced (Linked when their QuickBooks number matches a synced invoice).",
+    up: (d) => {
+      const entries = new Map(((d.timeEntries as StoredDocument[] | undefined) ?? []).map((e) => [String(e.id), e as { task?: string; workDate?: string }]));
+      const qbInvoices = ((d.quickbooksInvoices as StoredDocument[] | undefined) ?? []) as { qbInvoiceId?: string; docNumber?: string; customerId?: string | null }[];
+      const used = new Set<string>();
+      const invoiceDrafts = ((d.billingRecords as StoredDocument[] | undefined) ?? []).map((r) => {
+        const rec = r as { id: string; projectId: string; customerId: string; entryIds: string[]; firstWorkDate: string; lastWorkDate: string; lines: { task: string; minutes: number; rateCents: number; amountCents: number }[]; amountCents: number; invoicedOn: string; quickbooksInvoiceRef?: string };
+        const laborLines = rec.lines.map((l, i) => {
+          const ids = rec.entryIds.filter((id) => entries.get(id)?.task === l.task);
+          const dates = ids.map((id) => entries.get(id)?.workDate).filter((x): x is string => !!x).sort();
+          return { id: `${rec.id}_l${i + 1}`, task: l.task, minutes: l.minutes, rateCents: l.rateCents, amountCents: l.amountCents, firstWorkDate: dates[0] ?? rec.firstWorkDate, lastWorkDate: dates[dates.length - 1] ?? rec.lastWorkDate, entryIds: ids };
+        });
+        const match = rec.quickbooksInvoiceRef ? qbInvoices.find((q) => q.docNumber === rec.quickbooksInvoiceRef && q.customerId === rec.customerId && q.qbInvoiceId && !used.has(q.qbInvoiceId)) : undefined;
+        if (match?.qbInvoiceId) used.add(match.qbInvoiceId);
+        return {
+          id: rec.id,
+          projectId: rec.projectId,
+          customerId: rec.customerId,
+          throughDate: rec.lastWorkDate,
+          status: match ? "linked" : "invoiced",
+          createdOn: rec.invoicedOn,
+          laborLines,
+          expenseLines: [],
+          amountCents: rec.amountCents,
+          invoicedOn: rec.invoicedOn,
+          ...(rec.quickbooksInvoiceRef ? { quickbooksInvoiceRef: rec.quickbooksInvoiceRef } : {}),
+          ...(match ? { qbInvoiceId: match.qbInvoiceId } : {}),
+        };
+      });
+      const next: StoredDocument = { ...d, invoiceDrafts };
+      delete next.billingRecords;
+      return next;
+    },
+  },
 ];
 
 export class MigrationError extends Error {}

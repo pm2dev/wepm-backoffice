@@ -133,10 +133,11 @@ export const OPERATION_SCHEMAS = {
   addBillingRate: z.strictObject({ input: z.strictObject({ projectId: id, task: text(120).nullable(), effectiveDate: date, rateCents: cents }) }),
   removeBillingRate: z.strictObject({ id }),
   updateProject: z.strictObject({ id, input: projectInput, today }),
-  markInvoiced: z.strictObject({
-    input: z.strictObject({ projectId: id, through: date.optional(), invoicedOn: date, quickbooksInvoiceRef: text(100).optional() }),
-  }),
-  removeBillingRecord: z.strictObject({ id }),
+  createInvoiceDraft: z.strictObject({ input: z.strictObject({ projectId: id, throughDate: date }), today }),
+  removeDraftLine: z.strictObject({ draftId: id, lineId: id }),
+  markDraftInvoiced: z.strictObject({ input: z.strictObject({ draftId: id, invoicedOn: date, quickbooksInvoiceRef: text(100).optional() }) }),
+  linkDraft: z.strictObject({ input: z.strictObject({ draftId: id, qbInvoiceId: text(64) }) }),
+  undoDraftStep: z.strictObject({ draftId: id }),
   // Server-only (webhooks): never accepted from the browser.
   syncQuickBooks: z.never(),
   setInvoiceManuallyPaid: z.strictObject({ invoiceId: id, value: mark }),

@@ -30,6 +30,11 @@ function readSaved(storage: Storage): { data: BackofficeData; fromKey: string } 
   return null;
 }
 
+/** Saves from older builds are superseded once the current one exists. */
+function removeOlderSaves(storage: Storage) {
+  for (let v = SCHEMA_VERSION - 1; v >= 1; v--) storage.removeItem(storageKey(v));
+}
+
 /**
  * Frontend-prototype repository: sample data persisted in localStorage.
  * localStorage is a demonstration mechanism only — not production storage.
@@ -42,11 +47,9 @@ export class SampleRepository extends BackofficeRepository {
   async load(): Promise<BackofficeData> {
     if (this.data) return this.data;
     const saved = typeof window !== "undefined" ? readSaved(window.localStorage) : null;
-    if (!saved) return this.commit(buildSampleData());
-    if (saved.fromKey === STORAGE_KEY) return (this.data = saved.data);
-    this.commit(saved.data);
-    window.localStorage.removeItem(saved.fromKey);
-    return saved.data;
+    const data = !saved ? this.commit(buildSampleData()) : saved.fromKey === STORAGE_KEY ? (this.data = saved.data) : this.commit(saved.data);
+    if (typeof window !== "undefined") removeOlderSaves(window.localStorage);
+    return data;
   }
 
   private commit(next: BackofficeData): BackofficeData {

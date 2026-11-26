@@ -59,6 +59,35 @@ describe("migrations", () => {
     expect(data.projectExpenses).toEqual([]);
   });
 
+  it("v10 → v11: billing records become invoiced drafts, linked when the QuickBooks number matches", () => {
+    const v10 = {
+      schemaVersion: 10,
+      timeEntries: [
+        { id: "e1", task: "Development", workDate: "2026-10-05" },
+        { id: "e2", task: "Meetings", workDate: "2026-10-06" },
+        { id: "e3", task: "Development", workDate: "2026-10-07" },
+      ],
+      quickbooksInvoices: [{ qbInvoiceId: "1031", docNumber: "INV-31", customerId: "c1" }],
+      billingRecords: [
+        {
+          id: "bill_1", projectId: "p1", customerId: "c1", entryIds: ["e1", "e2", "e3"], firstWorkDate: "2026-10-05", lastWorkDate: "2026-10-07",
+          lines: [{ task: "Development", minutes: 120, rateCents: 10000, amountCents: 20000 }, { task: "Meetings", minutes: 60, rateCents: 5000, amountCents: 5000 }],
+          amountCents: 25000, invoicedOn: "2026-10-12", quickbooksInvoiceRef: "INV-31",
+        },
+        { id: "bill_2", projectId: "p1", customerId: "c1", entryIds: [], firstWorkDate: "2026-09-01", lastWorkDate: "2026-09-02", lines: [], amountCents: 0, invoicedOn: "2026-09-03" },
+      ],
+    };
+    const { data } = migrateData(v10, 10, { migrations: MIGRATIONS.slice(0, 4), oldest: 7, target: 11 });
+    expect("billingRecords" in data).toBe(false);
+    expect(data.invoiceDrafts[0]).toMatchObject({ id: "bill_1", status: "linked", qbInvoiceId: "1031", invoicedOn: "2026-10-12", amountCents: 25000, expenseLines: [] });
+    expect(data.invoiceDrafts[0].laborLines.map((l) => [l.task, l.entryIds, l.firstWorkDate, l.lastWorkDate])).toEqual([
+      ["Development", ["e1", "e3"], "2026-10-05", "2026-10-07"],
+      ["Meetings", ["e2"], "2026-10-06", "2026-10-06"],
+    ]);
+    expect(data.invoiceDrafts[1].status).toBe("invoiced");
+    expect(data.invoiceDrafts[1].qbInvoiceId).toBeUndefined();
+  });
+
   it("leaves current data unchanged", () => {
     const data = buildSampleData();
     const r = migrateData(data, SCHEMA_VERSION);

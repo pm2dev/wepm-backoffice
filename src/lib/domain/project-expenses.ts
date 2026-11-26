@@ -1,6 +1,6 @@
 import { compareDates, isISODate, type ISODate } from "./dates";
 import type { Cents } from "./money";
-import { FormError } from "./billing";
+import { FormError, reservedExpenseIds } from "./billing";
 import { addAdjustment, DomainError, paidAgainst, randomId, type IdFactory } from "./payroll";
 import { nextPayday } from "./schedule";
 import type { Adjustment, AdjustmentKind, BackofficeData, ExpenseCategory, ExpensePayer, ProjectExpense } from "./types";
@@ -122,6 +122,9 @@ export function updateProjectExpense(data: BackofficeData, id: string, input: Pr
   if (!existing) throw new DomainError("Expense not found.");
   validate(data, input);
   const expense: ProjectExpense = { ...existing, ...fields(input) };
+  if (reservedExpenseIds(data).has(id) && (expense.amountCents !== existing.amountCents || expense.projectId !== existing.projectId || expense.billable !== existing.billable || expense.date !== existing.date)) {
+    throw new FormError({ form: "This expense is on an invoice draft, so its amount, date, project and billable setting can't change. Remove it from the draft first." });
+  }
   let next: BackofficeData = { ...data, projectExpenses: data.projectExpenses.map((x) => (x.id === id ? expense : x)) };
 
   const owed = owedFor(data, id);
@@ -153,6 +156,7 @@ export function updateProjectExpense(data: BackofficeData, id: string, input: Pr
 /** Delete an expense (and what a contractor is owed for it, if nothing has been paid against that). */
 export function deleteProjectExpense(data: BackofficeData, id: string): BackofficeData {
   if (!data.projectExpenses.some((x) => x.id === id)) throw new DomainError("Expense not found.");
+  if (reservedExpenseIds(data).has(id)) throw new DomainError("This expense is on an invoice draft. Remove it from the draft first.");
   const owed = owedFor(data, id);
   if (owed && owedPaidCents(data, owed) > 0) throw new DomainError("Payments have already been applied to what's owed for this expense, so it can't be deleted.");
   return {

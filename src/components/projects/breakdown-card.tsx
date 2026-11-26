@@ -10,13 +10,14 @@ import { Dialog, DialogContent, useOpenerElement } from "@/components/ui/dialog"
 import { Field, Input } from "@/components/ui/field";
 import { useNotice } from "@/components/layout/notice";
 import { useBackoffice } from "@/lib/data/backoffice-provider";
-import type { ProjectBreakdown } from "@/lib/domain/billing";
+import { billingBreakdown, type ProjectBreakdown } from "@/lib/domain/billing";
+import { defaultThroughFor } from "@/lib/domain/invoice-drafts";
 import { formatDate, formatRange, isISODate } from "@/lib/domain/dates";
 import { formatCents, formatHours } from "@/lib/domain/money";
 import { DomainError } from "@/lib/domain/payroll";
 import { routes } from "@/lib/routes";
 
-/** One project's uninvoiced hours × billing rates, with the "mark invoiced" step. */
+/** One project's uninvoiced hours × billing rates and billable expenses, with the "create invoice draft" step. */
 export function BreakdownCard({ b, through, showProjectLink = true }: { b: ProjectBreakdown; through?: string; showProjectLink?: boolean }) {
   const [marking, setMarking] = useState(false);
   return (
@@ -27,7 +28,9 @@ export function BreakdownCard({ b, through, showProjectLink = true }: { b: Proje
             {showProjectLink ? <Link href={routes.project(b.project.id)} className="underline-offset-2 hover:underline">{b.project.name}</Link> : b.project.name}
           </p>
           <p className="text-sm text-slate-600">
-            {formatHours(b.minutes)} · work dates {formatRange(b.firstWorkDate, b.lastWorkDate)} · {b.project.billingMethod === "hourly" ? "one hourly rate" : "rates by task"}
+            {formatHours(b.minutes)}
+            {b.expenses.length ? ` + ${b.expenses.length} expense${b.expenses.length === 1 ? "" : "s"}` : ""} · {formatRange(b.firstWorkDate, b.lastWorkDate)} ·{" "}
+            {b.project.billingMethod === "hourly" ? "one hourly rate" : "rates by task"}
           </p>
         </div>
         <div className="sm:text-right">
@@ -63,12 +66,23 @@ export function BreakdownCard({ b, through, showProjectLink = true }: { b: Proje
                 <td className="tabular px-4 py-2.5 text-right">{l.amountCents === null ? <span className="text-red-700">—</span> : formatCents(l.amountCents)}</td>
               </tr>
             ))}
+            {b.expenses.map((x) => (
+              <tr key={x.id}>
+                <td className="px-4 py-2.5">
+                  {x.vendor}
+                  <span className="block text-xs text-slate-500">Expense at cost · {formatDate(x.date)}{x.description ? ` · ${x.description}` : ""}</span>
+                </td>
+                <td className="px-4 py-2.5 text-right text-slate-400">—</td>
+                <td className="hidden px-4 py-2.5 sm:table-cell" />
+                <td className="tabular px-4 py-2.5 text-right">{formatCents(x.amountCents)}</td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
       <div className="flex flex-col gap-3 border-t border-slate-200 p-4 sm:flex-row sm:items-center sm:justify-between">
         {b.complete ? (
-          <p className="text-sm text-slate-600">Create this invoice in QuickBooks, then mark these hours invoiced.</p>
+          <p className="text-sm text-slate-600">Create a draft to reserve these items, then create the invoice in QuickBooks.</p>
         ) : (
           <p className="flex gap-2 text-sm text-red-800">
             <AlertTriangle className="size-4 shrink-0" aria-hidden />
@@ -79,62 +93,60 @@ export function BreakdownCard({ b, through, showProjectLink = true }: { b: Proje
           </p>
         )}
         <Button onClick={() => setMarking(true)} disabled={!b.complete} className="shrink-0">
-          Mark invoiced<span className="sr-only"> for {b.project.name}</span>
+          Create invoice draft<span className="sr-only"> for {b.project.name}</span>
         </Button>
       </div>
-      {marking ? <MarkInvoicedDialog b={b} through={through} onClose={() => setMarking(false)} /> : null}
+      {marking ? <CreateDraftDialog b={b} through={through} onClose={() => setMarking(false)} /> : null}
     </Card>
   );
 }
 
-function MarkInvoicedDialog({ b, through, onClose }: { b: ProjectBreakdown; through?: string; onClose: () => void }) {
-  const { today, mutate } = useBackoffice();
+function CreateDraftDialog({ b, through, onClose }: { b: ProjectBreakdown; through?: string; onClose: () => void }) {
+  const { state, today, mutate } = useBackoffice();
   const notify = useNotice();
   const opener = useOpenerElement();
-  const [invoicedOn, setInvoicedOn] = useState(today);
-  const [ref, setRef] = useState("");
+  const [throughDate, setThroughDate] = useState(through ?? (state.status === "ready" ? defaultThroughFor(state.data, b.project.id, today) : today));
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const preview = state.status === "ready" && isISODate(throughDate) ? billingBreakdown(state.data, throughDate).flatMap((c) => c.projects).find((x) => x.project.id === b.project.id) : undefined;
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent
-        title={`Mark ${b.project.name} invoiced`}
-        description="Use after creating the invoice in QuickBooks. This doesn't mark the invoice paid or pay any contractor."
-        returnFocusTo={opener}
-      >
+      <DialogContent title={`Create an invoice draft for ${b.project.name}`} description="Reserves the uninvoiced hours and billable expenses up to a date, so they can't be billed twice. Nothing is sent to QuickBooks." returnFocusTo={opener}>
         <form
           noValidate
           className="space-y-4"
           onSubmit={async (e) => {
             e.preventDefault();
-            if (!isISODate(invoicedOn)) return setError("Enter the invoice date.");
+            if (!isISODate(throughDate)) return setError("Enter the date to invoice through.");
             setSaving(true);
             try {
-              const r = await mutate((repo) => repo.markInvoiced({ projectId: b.project.id, through, invoicedOn, quickbooksInvoiceRef: ref }));
-              notify(`${formatHours(b.minutes)} on ${b.project.name} marked invoiced (${formatCents(r.amountCents)}).`);
+              const d = await mutate((repo) => repo.createInvoiceDraft({ projectId: b.project.id, throughDate }, today));
+              notify(`Draft created for ${b.project.name}: ${formatCents(d.amountCents)}.`);
               onClose();
             } catch (err) {
-              setError(err instanceof DomainError ? err.message : "Could not save. Nothing was changed.");
+              setError(err instanceof DomainError ? err.message : "Could not create the draft. Nothing was changed.");
               setSaving(false);
             }
           }}
         >
-          <div className="rounded-lg bg-slate-50 p-3 text-sm">
-            <p>
-              <strong className="tabular">{formatCents(b.knownAmountCents)}</strong> for {formatHours(b.minutes)} ({b.entries.length} entries)
-            </p>
-            <p className="text-slate-600">Work dates {formatDate(b.firstWorkDate)} – {formatDate(b.lastWorkDate)}</p>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Invoice date" htmlFor="inv-date" error={error ?? undefined}>
-              <Input id="inv-date" type="date" value={invoicedOn} onChange={(e) => setInvoicedOn(e.target.value)} />
-            </Field>
-            <Field label="QuickBooks invoice # (optional)" htmlFor="inv-ref">
-              <Input id="inv-ref" value={ref} onChange={(e) => setRef(e.target.value)} autoComplete="off" />
-            </Field>
+          <Field label="Invoice through" htmlFor="draft-through" error={error ?? undefined} hint="Defaults to the end of the last full billing period.">
+            <Input id="draft-through" type="date" value={throughDate} onChange={(e) => setThroughDate(e.target.value)} className="max-w-48" />
+          </Field>
+          <div className="rounded-lg bg-slate-50 p-3 text-sm" role="status">
+            {preview ? (
+              <>
+                <p>
+                  <strong className="tabular">{formatCents(preview.knownAmountCents)}</strong> for {formatHours(preview.minutes)}
+                  {preview.expenses.length ? ` and ${preview.expenses.length} expense${preview.expenses.length === 1 ? "" : "s"}` : ""}
+                </p>
+                {!preview.complete ? <p className="text-red-800">Some of these hours have no billing rate yet.</p> : null}
+              </>
+            ) : (
+              <p>Nothing to invoice through that date.</p>
+            )}
           </div>
           <div className="flex justify-end border-t border-slate-200 pt-4">
-            <Button type="submit" disabled={saving}>{saving ? "Saving…" : "Mark invoiced"}</Button>
+            <Button type="submit" disabled={saving || !preview || !preview.complete}>{saving ? "Creating…" : "Create draft"}</Button>
           </div>
         </form>
       </DialogContent>

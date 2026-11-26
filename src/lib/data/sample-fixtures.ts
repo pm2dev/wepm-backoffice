@@ -4,7 +4,7 @@
  * production data. Built through the real domain functions so finalized
  * records and payments are internally consistent.
  */
-import { markInvoiced } from "@/lib/domain/billing";
+import { createInvoiceDraft, linkDraft, markDraftInvoiced } from "@/lib/domain/invoice-drafts";
 import { addProjectExpense } from "@/lib/domain/project-expenses";
 import { SCHEMA_VERSION } from "@/lib/domain/empty";
 import { setPaymentDone, syncQuickBooks } from "@/lib/domain/quickbooks-sync";
@@ -128,7 +128,7 @@ export function buildSampleData(): BackofficeData {
       { id: "brate_nw_2", projectId: "p_northwind", task: null, effectiveDate: "2026-10-19", rateCents: 14500 },
       { id: "brate_disc_1", projectId: "p_northwind_disc", task: null, effectiveDate: "2026-07-06", rateCents: 15000 },
     ],
-    billingRecords: [],
+    invoiceDrafts: [],
     invoiceReceipts: [],
     quickbooksInvoices: [],
     integrations: {},
@@ -295,13 +295,15 @@ export function buildSampleData(): BackofficeData {
   };
   data = { ...data, timeExceptions: [exception] };
 
-  // Billing: the first October week was invoiced in QuickBooks and marked here.
-  data = markInvoiced(data, { projectId: "p_acme", through: "2026-10-11", invoicedOn: "2026-10-12", quickbooksInvoiceRef: "INV-2026-031" }, id).data;
-  data = markInvoiced(data, { projectId: "p_northwind", through: "2026-10-11", invoicedOn: "2026-10-12", quickbooksInvoiceRef: "INV-2026-032" }, id).data;
+  // Billing: the first October week was drafted here, invoiced in QuickBooks and marked invoiced.
+  const acmeDraft = createInvoiceDraft(data, { projectId: "p_acme", throughDate: "2026-10-11" }, "2026-10-12", id);
+  data = markDraftInvoiced(acmeDraft.data, { draftId: acmeDraft.draft.id, invoicedOn: "2026-10-12", quickbooksInvoiceRef: "INV-2026-031" });
+  const nwDraft = createInvoiceDraft(data, { projectId: "p_northwind", throughDate: "2026-10-11" }, "2026-10-12", id);
+  data = markDraftInvoiced(nwDraft.data, { draftId: nwDraft.draft.id, invoicedOn: "2026-10-12", quickbooksInvoiceRef: "INV-2026-032" });
 
   // QuickBooks (sample): invoices and customer payments as Slashbin would deliver them.
-  const inv031 = data.billingRecords.find((r) => r.quickbooksInvoiceRef === "INV-2026-031")!.amountCents / 100;
-  const inv032 = data.billingRecords.find((r) => r.quickbooksInvoiceRef === "INV-2026-032")!.amountCents / 100;
+  const inv031 = acmeDraft.draft.amountCents / 100;
+  const inv032 = nwDraft.draft.amountCents / 100;
   data = syncQuickBooks(
     data,
     {
@@ -321,6 +323,8 @@ export function buildSampleData(): BackofficeData {
     id,
     { sample: true },
   ).data;
+  // INV-2026-032 has synced and was linked to its draft; INV-2026-031 is still waiting to be linked.
+  data = linkDraft(data, { draftId: nwDraft.draft.id, qbInvoiceId: "1032" });
   // The September payment was already handled.
   data = setPaymentDone(data, data.invoiceReceipts.find((r) => r.externalPaymentId === "5530")!.id, { on: "2026-09-30", note: "Paid September payroll and bills." });
 

@@ -107,7 +107,7 @@ export function InvoiceRows({ data, invoices, showCustomer = true }: { data: Bac
         <ul className="divide-y divide-slate-200">
           {invoices.map((v) => {
             const customer = data.customers.find((c) => c.id === v.customerId);
-            const billed = v.docNumber ? data.billingRecords.find((r) => r.quickbooksInvoiceRef === v.docNumber) : undefined;
+            const billed = data.invoiceDrafts.find((d) => d.qbInvoiceId === v.qbInvoiceId) ?? (v.docNumber ? data.invoiceDrafts.find((d) => d.status !== "draft" && d.quickbooksInvoiceRef === v.docNumber) : undefined);
             const label = v.docNumber ?? `QuickBooks #${v.qbInvoiceId}`;
             return (
               <li key={v.id} className="flex flex-col gap-3 p-4 xl:flex-row xl:items-center">
