@@ -48,8 +48,11 @@ export function BreakdownCard({ b, through, showProjectLink = true }: { b: Proje
           </thead>
           <tbody className="divide-y divide-slate-200">
             {b.lines.map((l) => (
-              <tr key={l.task} className={l.rateCents === null ? "bg-red-50/60" : undefined}>
-                <td className="px-4 py-2.5">{l.task}</td>
+              <tr key={`${l.task}-${l.rateCents ?? "none"}-${l.firstWorkDate}`} className={l.rateCents === null ? "bg-red-50/60" : undefined}>
+                <td className="px-4 py-2.5">
+                  {l.task}
+                  {b.lines.filter((x) => x.task === l.task).length > 1 ? <span className="block text-xs text-slate-500">{formatRange(l.firstWorkDate, l.lastWorkDate)}</span> : null}
+                </td>
                 <td className="tabular px-4 py-2.5 text-right">
                   {formatHours(l.minutes)}
                   <span className={`block text-xs sm:hidden ${l.rateCents === null ? "font-medium text-red-700" : "text-slate-500"}`}>

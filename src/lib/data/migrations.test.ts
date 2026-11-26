@@ -16,7 +16,7 @@ describe("migrations", () => {
 
   it("v7 → v8: a project's active flag becomes a status", () => {
     const v7 = { schemaVersion: 7, projects: [{ id: "a", active: true }, { id: "b", active: false }] };
-    const { data } = migrateData(v7, 7);
+    const { data } = migrateData(v7, 7, { migrations: MIGRATIONS.slice(0, 1), target: 8 });
     expect(data.schemaVersion).toBe(8);
     expect(data.projects).toEqual([{ id: "a", status: "active" }, { id: "b", status: "completed" }]);
   });
@@ -27,6 +27,31 @@ describe("migrations", () => {
     const { data } = migrateData(stored, 7);
     expect(data.projects.every((p) => p.status === "active" || p.status === "completed")).toBe(true);
     expect(data.projects.some((p) => "active" in p)).toBe(false);
+  });
+
+  it("v8 → v9: project rates become dated rows from the earliest of start date and first hours", () => {
+    const v8 = {
+      schemaVersion: 8,
+      projects: [
+        { id: "h", billingMethod: "hourly", hourlyRateCents: 14000, taskRates: {}, startDate: "2026-09-14" },
+        { id: "t", billingMethod: "task", taskRates: { Development: 12500, Meetings: 7500 } },
+        { id: "none", billingMethod: "hourly", taskRates: {} },
+        { id: "fresh", billingMethod: "hourly", hourlyRateCents: 9000, taskRates: {} },
+      ],
+      timeEntries: [
+        { projectId: "h", workDate: "2026-09-01" },
+        { projectId: "t", workDate: "2026-10-05" },
+        { projectId: "t", workDate: "2026-08-03" },
+      ],
+    };
+    const { data } = migrateData(v8, 8, { migrations: MIGRATIONS.slice(0, 2), oldest: 7, target: 9 });
+    expect(data.projects.every((p) => !("hourlyRateCents" in p) && !("taskRates" in p))).toBe(true);
+    expect(data.billingRates).toEqual([
+      { id: "brate_h_1", projectId: "h", task: null, effectiveDate: "2026-09-01", rateCents: 14000 },
+      { id: "brate_t_1", projectId: "t", task: "Development", effectiveDate: "2026-08-03", rateCents: 12500 },
+      { id: "brate_t_2", projectId: "t", task: "Meetings", effectiveDate: "2026-08-03", rateCents: 7500 },
+      { id: "brate_fresh_1", projectId: "fresh", task: null, effectiveDate: "2000-01-01", rateCents: 9000 },
+    ]);
   });
 
   it("leaves current data unchanged", () => {

@@ -112,13 +112,20 @@ export function buildSampleData(): BackofficeData {
     projects: [
       {
         id: "p_acme", name: "Member portal", customerId: "cust_acme", billable: true, billingMethod: "task",
-        // Design intentionally has no rate yet — demonstrates the missing-task-rate state.
-        taskRates: { Development: 12500, Meetings: 7500 },
         wepmProjectId: "wepm_p_201", status: "active", startDate: "2026-08-03", budgetCents: 6000000,
       },
-      { id: "p_northwind", name: "Data migration", customerId: "cust_northwind", billable: true, billingMethod: "hourly", hourlyRateCents: 14000, taskRates: {}, wepmProjectId: "wepm_p_202", status: "active", startDate: "2026-09-14", budgetCents: 4200000, budgetMinutes: 18000 },
-      { id: "p_northwind_disc", name: "Discovery", customerId: "cust_northwind", billable: true, billingMethod: "hourly", hourlyRateCents: 15000, taskRates: {}, billingCadence: "monthly", status: "on_hold", startDate: "2026-07-06" },
-      { id: "p_internal", name: "Internal operations", customerId: null, billable: false, billingMethod: "hourly", taskRates: {}, wepmProjectId: "wepm_p_200", status: "active", costBudgetCents: 1500000 },
+      { id: "p_northwind", name: "Data migration", customerId: "cust_northwind", billable: true, billingMethod: "hourly", wepmProjectId: "wepm_p_202", status: "active", startDate: "2026-09-14", budgetCents: 4200000, budgetMinutes: 18000 },
+      { id: "p_northwind_disc", name: "Discovery", customerId: "cust_northwind", billable: true, billingMethod: "hourly", billingCadence: "monthly", status: "on_hold", startDate: "2026-07-06" },
+      { id: "p_internal", name: "Internal operations", customerId: null, billable: false, billingMethod: "hourly", wepmProjectId: "wepm_p_200", status: "active", costBudgetCents: 1500000 },
+    ],
+    billingRates: [
+      // Member portal: Design intentionally has no rate yet — demonstrates the missing-task-rate state.
+      { id: "brate_acme_dev", projectId: "p_acme", task: "Development", effectiveDate: "2026-08-03", rateCents: 12500 },
+      { id: "brate_acme_meet", projectId: "p_acme", task: "Meetings", effectiveDate: "2026-08-03", rateCents: 7500 },
+      // Data migration: a rate increase mid-period demonstrates billing lines split by work date.
+      { id: "brate_nw_1", projectId: "p_northwind", task: null, effectiveDate: "2026-09-14", rateCents: 14000 },
+      { id: "brate_nw_2", projectId: "p_northwind", task: null, effectiveDate: "2026-10-19", rateCents: 14500 },
+      { id: "brate_disc_1", projectId: "p_northwind_disc", task: null, effectiveDate: "2026-07-06", rateCents: 15000 },
     ],
     billingRecords: [],
     invoiceReceipts: [],

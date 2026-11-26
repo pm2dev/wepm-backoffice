@@ -72,11 +72,8 @@ export type Project = {
   customerId: string | null;
   /** One setting per project. Nonbillable time is still paid to contractors. */
   billable: boolean;
-  /** "hourly" = one flat rate; "task" = a rate per task. */
+  /** "hourly" = one rate for every task; "task" = a rate per task. Rates live in `billingRates`. */
   billingMethod: "hourly" | "task";
-  hourlyRateCents?: Cents;
-  /** Task name → billing rate (task method). */
-  taskRates: Record<string, Cents>;
   billingCadence?: BillingCadence;
   wepmProjectId?: string;
   status: ProjectStatus;
@@ -88,6 +85,19 @@ export type Project = {
   budgetMinutes?: number;
   /** Internal projects: lifetime cost budget. */
   costBudgetCents?: Cents;
+};
+
+/**
+ * What a customer is charged per hour on a project, from a date (ADR-0003).
+ * `task: null` is the project's one hourly rate (hourly method); otherwise the
+ * rate for that task (task method). A time entry uses the rate in effect on its work date.
+ */
+export type BillingRate = {
+  id: string;
+  projectId: string;
+  task: string | null;
+  effectiveDate: ISODate;
+  rateCents: Cents;
 };
 
 /** A billing line preserved when hours are marked invoiced. */
@@ -337,10 +347,11 @@ export type IntegrationSettings = {
 };
 
 export type BackofficeData = {
-  schemaVersion: 8;
+  schemaVersion: 9;
   contractors: Contractor[];
   rates: ContractorRate[];
   projects: Project[];
+  billingRates: BillingRate[];
   timeEntries: TimeEntry[];
   timeExceptions: TimeException[];
   payrolls: FinalizedPayroll[];

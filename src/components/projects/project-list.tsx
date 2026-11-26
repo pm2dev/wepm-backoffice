@@ -15,18 +15,13 @@ import { projectSummary } from "@/lib/domain/billing";
 import { formatCents, formatHours } from "@/lib/domain/money";
 import { PROJECT_STATUS_LABELS, type BackofficeData, type Project, type ProjectStatus } from "@/lib/domain/types";
 import { routes } from "@/lib/routes";
+import { billingLabel } from "./billing-rates";
 import { ProjectForm } from "./project-form";
 import { ProjectsTabs } from "./projects-tabs";
 
-export function billingLabel(p: Project) {
-  if (!p.customerId) return "Internal";
-  if (!p.billable) return "Nonbillable";
-  if (p.billingMethod === "hourly") return p.hourlyRateCents ? `${formatCents(p.hourlyRateCents)}/h` : "No hourly rate";
-  const n = Object.keys(p.taskRates).length;
-  return `Rates by task (${n})`;
-}
 
 export function ProjectRows({ data, projects }: { data: BackofficeData; projects: Project[] }) {
+  const { today } = useBackoffice();
   return (
     <Card>
       <ul className="divide-y divide-slate-200">
@@ -41,7 +36,7 @@ export function ProjectRows({ data, projects }: { data: BackofficeData; projects
                     <p className="font-medium text-slate-900">{p.name}</p>
                     <p className="text-sm text-slate-600">{customer?.name ?? "WEPM Labs (internal)"}</p>
                     <div className="mt-1.5 flex flex-wrap gap-1.5">
-                      <Badge tone={p.billable && p.customerId ? "info" : "neutral"}>{billingLabel(p)}</Badge>
+                      <Badge tone={p.billable && p.customerId ? "info" : "neutral"}>{billingLabel(data, p, today)}</Badge>
                       {p.status === "active" ? null : <Badge tone={p.status === "on_hold" ? "warning" : "neutral"}>{PROJECT_STATUS_LABELS[p.status]}</Badge>}
                       {p.wepmProjectId ? null : <Badge tone="warning">No wepm.app ID</Badge>}
                     </div>
