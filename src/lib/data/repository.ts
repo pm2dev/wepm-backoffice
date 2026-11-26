@@ -1,4 +1,5 @@
 import type { BillingRateInput, CustomerInput, NewProjectInput, ProjectInput } from "@/lib/domain/billing";
+import type { ProjectExpenseInput } from "@/lib/domain/project-expenses";
 import type { ContractorInput } from "@/lib/domain/contractors";
 import type { ISODate } from "@/lib/domain/dates";
 import type { ExpenseInput } from "@/lib/domain/expenses";
@@ -49,6 +50,9 @@ export abstract class BackofficeRepository {
   updateCustomer = (id: string, input: CustomerInput) => this.run("updateCustomer", { id, input });
   addProject = (input: NewProjectInput, today: ISODate) => this.run("addProject", { input, today });
   updateProject = (id: string, input: ProjectInput, today: ISODate) => this.run("updateProject", { id, input, today });
+  addProjectExpense = (input: ProjectExpenseInput, today: ISODate) => this.run("addProjectExpense", { input, today });
+  updateProjectExpense = (id: string, input: ProjectExpenseInput) => this.run("updateProjectExpense", { id, input });
+  deleteProjectExpense = (id: string) => this.run("deleteProjectExpense", { id });
   addBillingRate = (input: BillingRateInput) => this.run("addBillingRate", { input });
   removeBillingRate = (id: string) => this.run("removeBillingRate", { id });
   markInvoiced = (input: { projectId: string; through?: ISODate; invoicedOn: ISODate; quickbooksInvoiceRef?: string }) => this.run("markInvoiced", { input });

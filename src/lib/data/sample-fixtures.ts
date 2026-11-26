@@ -214,6 +214,12 @@ export function buildSampleData(): BackofficeData {
       { id: "exp_notion", vendor: "Notion", type: "subscription", projectId: null, frequency: "monthly", firstDueDate: "2026-05-20", endDate: "2026-09-30", amountKind: "fixed", amountCents: 2000, autopay: true, accountId: "acct_chase", notes: "Cancelled in September.", createdOn: "2026-05-15" },
     ],
     expenseCharges: [],
+    projectExpenses: [
+      { id: "pex_iphone", date: "2026-10-06", vendor: "Apple", description: "Test iPhone for the member portal app", amountCents: 79900, category: "hardware", projectId: "p_acme", billable: false, paidBy: { kind: "account", accountId: "acct_amex" }, createdOn: "2026-10-06" },
+      { id: "pex_appstore", date: "2026-10-14", vendor: "Apple Developer Program", description: "App Store developer membership for Acme", amountCents: 9900, category: "software", projectId: "p_acme", billable: true, paidBy: { kind: "account", accountId: "acct_chase" }, receiptUrl: "https://example.com/receipts/apple-developer", createdOn: "2026-10-14" },
+      { id: "pex_flight", date: "2026-10-20", vendor: "United Airlines", description: "Kickoff workshop travel", amountCents: 41250, category: "travel", projectId: "p_northwind", billable: true, paidBy: { kind: "account", accountId: "acct_chase" }, createdOn: "2026-10-21" },
+      { id: "pex_monitor", date: "2026-10-09", vendor: "Best Buy", description: "Second monitor for the office", amountCents: 32999, category: "hardware", projectId: null, billable: false, paidBy: { kind: "account", accountId: "acct_amex" }, createdOn: "2026-10-09" },
+    ],
   };
 
   // Bills: everything through September verified paid, plus some October items.

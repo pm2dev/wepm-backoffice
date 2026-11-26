@@ -10,6 +10,7 @@ import * as expenses from "@/lib/domain/expenses";
 import { commitImport } from "@/lib/domain/history-import";
 import { emptyData } from "@/lib/domain/empty";
 import * as payroll from "@/lib/domain/payroll";
+import * as projectExpenses from "@/lib/domain/project-expenses";
 import * as qb from "@/lib/domain/quickbooks-sync";
 import type { BackofficeData } from "@/lib/domain/types";
 import { buildSampleData } from "./sample-fixtures";
@@ -78,6 +79,15 @@ export const OPERATIONS = {
     const r = billing.updateProject(d, a.id, a.input, a.today);
     return { data: r.data, result: r.project };
   },
+  addProjectExpense: (d: BackofficeData, a: { input: projectExpenses.ProjectExpenseInput; today: string }) => {
+    const r = projectExpenses.addProjectExpense(d, a.input, a.today);
+    return { data: r.data, result: r.expense };
+  },
+  updateProjectExpense: (d: BackofficeData, a: { id: string; input: projectExpenses.ProjectExpenseInput }) => {
+    const r = projectExpenses.updateProjectExpense(d, a.id, a.input);
+    return { data: r.data, result: r.expense };
+  },
+  deleteProjectExpense: (d: BackofficeData, a: { id: string }) => unit(projectExpenses.deleteProjectExpense(d, a.id)),
   addBillingRate: (d: BackofficeData, a: { input: billing.BillingRateInput }) => {
     const r = billing.addBillingRate(d, a.input);
     return { data: r.data, result: r.rate };

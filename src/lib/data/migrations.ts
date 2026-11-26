@@ -58,6 +58,11 @@ export const MIGRATIONS: Migration[] = [
       return { ...d, projects, billingRates };
     },
   },
+  {
+    from: 9,
+    description: "Adds project expenses (one-off costs on a project or the company).",
+    up: (d) => ({ ...d, projectExpenses: [] }),
+  },
 ];
 
 export class MigrationError extends Error {}

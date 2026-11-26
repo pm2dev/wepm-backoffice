@@ -8,6 +8,7 @@ export function BillsTabs() {
         { href: "/bills", label: "Monthly review" },
         { href: "/bills/upcoming", label: "Upcoming & spending" },
         { href: "/bills/recurring", label: "Bills & subscriptions" },
+        { href: "/bills/expenses", label: "One-off expenses" },
         { href: "/bills/accounts", label: "Cards & accounts" },
       ]}
     />

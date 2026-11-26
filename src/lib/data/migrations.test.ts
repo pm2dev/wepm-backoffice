@@ -54,6 +54,11 @@ describe("migrations", () => {
     ]);
   });
 
+  it("v9 → v10: adds an empty project expense list", () => {
+    const { data } = migrateData({ schemaVersion: 9, projects: [] }, 9, { migrations: MIGRATIONS.slice(0, 3), oldest: 7, target: 10 });
+    expect(data.projectExpenses).toEqual([]);
+  });
+
   it("leaves current data unchanged", () => {
     const data = buildSampleData();
     const r = migrateData(data, SCHEMA_VERSION);

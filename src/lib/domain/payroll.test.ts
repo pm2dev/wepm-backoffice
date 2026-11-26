@@ -25,7 +25,7 @@ const ids = (): IdFactory => shared;
 
 function base(): BackofficeData {
   return {
-    schemaVersion: 9,
+    schemaVersion: 10,
     contractors: [
       { id: "c1", name: "Test Person", startDate: "2026-01-05", schedule: { kind: "weekly", payDelayDays: 5 }, preferredMethod: "venmo", wepmUserId: "u1" },
     ],
@@ -47,6 +47,7 @@ function base(): BackofficeData {
     paymentAccounts: [],
     expenses: [],
     expenseCharges: [],
+    projectExpenses: [],
     customers: [],
     billingRecords: [],
     invoiceReceipts: [],

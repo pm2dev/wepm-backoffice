@@ -287,6 +287,32 @@ export type ExpenseCharge = {
   paidOn?: ISODate;
 };
 
+export type ExpenseCategory = "software" | "hardware" | "travel" | "contractor_services" | "other";
+
+/** Who paid for a project expense. (A contractor payee comes with reimbursements.) */
+export type ExpensePayer = { kind: "account"; accountId: string };
+
+/**
+ * A one-off cost tied to one project, or to the company (overhead) when
+ * `projectId` is null. Never split across projects. Billable expenses are
+ * passed to the customer at cost.
+ */
+export type ProjectExpense = {
+  id: string;
+  date: ISODate;
+  vendor: string;
+  description: string;
+  amountCents: Cents;
+  category: ExpenseCategory;
+  projectId: string | null;
+  billable: boolean;
+  paidBy: ExpensePayer;
+  /** A link to the receipt (e.g. Google Drive). File uploads aren't supported yet. */
+  receiptUrl?: string;
+  notes?: string;
+  createdOn: ISODate;
+};
+
 /** A manual override recorded by the owner. Never written back to QuickBooks. */
 export type ManualMark = { on: ISODate; note?: string };
 
@@ -347,7 +373,7 @@ export type IntegrationSettings = {
 };
 
 export type BackofficeData = {
-  schemaVersion: 9;
+  schemaVersion: 10;
   contractors: Contractor[];
   rates: ContractorRate[];
   projects: Project[];
@@ -361,6 +387,7 @@ export type BackofficeData = {
   paymentAccounts: PaymentAccount[];
   expenses: RecurringExpense[];
   expenseCharges: ExpenseCharge[];
+  projectExpenses: ProjectExpense[];
   customers: Customer[];
   billingRecords: BillingRecord[];
   invoiceReceipts: InvoiceReceipt[];
