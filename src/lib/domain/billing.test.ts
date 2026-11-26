@@ -62,13 +62,34 @@ describe("billing breakdown", () => {
 describe("customers and projects", () => {
   it("validates names, internal-not-billable, and unique source IDs", () => {
     expect(() => addCustomer(buildSampleData(), { name: "acme corp (sample)", billingCadence: "monthly" }, ids)).toThrow(FormError);
-    const base = { name: "X", customerId: null, billable: true, billingMethod: "hourly" as const, taskRates: {}, active: true };
+    const base = { name: "X", customerId: null, billable: true, billingMethod: "hourly" as const, taskRates: {}, status: "active" as const };
     try {
       addProject(buildSampleData(), { ...base, wepmProjectId: "wepm_p_201" }, TODAY, ids);
       throw new Error("expected failure");
     } catch (e) {
       expect(Object.keys((e as FormError).fields).sort()).toEqual(["billable", "wepmProjectId"]);
     }
+  });
+
+  it("validates status dates and budgets, and keeps only the budget that fits the project type", () => {
+    const client = { name: "Y", customerId: "cust_acme", billable: true, billingMethod: "hourly" as const, hourlyRateCents: 10000, taskRates: {}, status: "active" as const };
+    const fields = (input: Parameters<typeof addProject>[1]) => {
+      try {
+        addProject(buildSampleData(), input, TODAY, ids);
+        return [];
+      } catch (e) {
+        return Object.keys((e as FormError).fields).sort();
+      }
+    };
+    expect(fields({ ...client, startDate: "2026-10-10", endDate: "2026-10-01" })).toEqual(["endDate"]);
+    expect(fields({ ...client, startDate: "10/1/2026" })).toEqual(["startDate"]);
+    expect(fields({ ...client, budgetCents: 0, budgetMinutes: -60 })).toEqual(["budgetCents", "budgetMinutes"]);
+    expect(fields({ ...client, status: "archived" as never })).toEqual(["status"]);
+
+    const { project: c } = addProject(buildSampleData(), { ...client, budgetCents: 500000, budgetMinutes: 600, costBudgetCents: 100 }, TODAY, ids);
+    expect(c).toMatchObject({ budgetCents: 500000, budgetMinutes: 600, costBudgetCents: undefined });
+    const { project: i } = addProject(buildSampleData(), { ...client, customerId: null, billable: false, budgetCents: 500000, costBudgetCents: 900000 }, TODAY, ids);
+    expect(i).toMatchObject({ budgetCents: undefined, budgetMinutes: undefined, costBudgetCents: 900000 });
   });
 
   it("mapping the missing wepm.app project ID resolves the held-back entry into payroll and billing", () => {

@@ -14,6 +14,21 @@ describe("migrations", () => {
     expect(() => checkMigrationChain(MIGRATIONS, OLDEST_MIGRATABLE_VERSION, SCHEMA_VERSION)).not.toThrow();
   });
 
+  it("v7 → v8: a project's active flag becomes a status", () => {
+    const v7 = { schemaVersion: 7, projects: [{ id: "a", active: true }, { id: "b", active: false }] };
+    const { data } = migrateData(v7, 7);
+    expect(data.schemaVersion).toBe(8);
+    expect(data.projects).toEqual([{ id: "a", status: "active" }, { id: "b", status: "completed" }]);
+  });
+
+  it("upgrades the sample data as stored by version 7", () => {
+    const v7 = buildSampleData() as unknown as Record<string, unknown> & { projects: Record<string, unknown>[] };
+    const stored = { ...v7, schemaVersion: 7, projects: v7.projects.map(({ status, ...p }) => ({ ...p, active: status !== "completed" })) };
+    const { data } = migrateData(stored, 7);
+    expect(data.projects.every((p) => p.status === "active" || p.status === "completed")).toBe(true);
+    expect(data.projects.some((p) => "active" in p)).toBe(false);
+  });
+
   it("leaves current data unchanged", () => {
     const data = buildSampleData();
     const r = migrateData(data, SCHEMA_VERSION);

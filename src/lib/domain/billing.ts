@@ -2,7 +2,7 @@ import { compareDates, isISODate, type ISODate } from "./dates";
 import { ingestApprovedTime } from "./ingest";
 import { payForMinutes, type Cents } from "./money";
 import { DomainError, randomId, type IdFactory } from "./payroll";
-import type { BackofficeData, BillingCadence, BillingLine, BillingRecord, Customer, Project, TimeEntry } from "./types";
+import type { BackofficeData, BillingCadence, BillingLine, BillingRecord, Customer, Project, ProjectStatus, TimeEntry } from "./types";
 
 export const CADENCE_LABEL: Record<BillingCadence, string> = {
   weekly: "Weekly",
@@ -69,8 +69,19 @@ function validateProject(data: BackofficeData, input: ProjectInput, selfId?: str
   }
   const wepm = input.wepmProjectId?.trim();
   if (wepm && data.projects.some((p) => p.id !== selfId && p.wepmProjectId === wepm)) e.wepmProjectId = "Another project already uses this wepm.app ID.";
+  if (!PROJECT_STATUSES.includes(input.status)) e.status = "Choose a status.";
+  if (input.startDate && !isISODate(input.startDate)) e.startDate = "Enter a valid start date.";
+  if (input.endDate && !isISODate(input.endDate)) e.endDate = "Enter a valid end date.";
+  else if (input.startDate && input.endDate && isISODate(input.startDate) && compareDates(input.endDate, input.startDate) < 0) e.endDate = "The end date can't be before the start date.";
+  const positive = (n: number | undefined) => n === undefined || (Number.isSafeInteger(n) && n > 0);
+  if (input.customerId) {
+    if (!positive(input.budgetCents)) e.budgetCents = "Enter a budget greater than $0, or leave it blank.";
+    if (!positive(input.budgetMinutes)) e.budgetMinutes = "Enter budget hours greater than 0, or leave it blank.";
+  } else if (!positive(input.costBudgetCents)) e.costBudgetCents = "Enter a cost budget greater than $0, or leave it blank.";
   if (Object.keys(e).length) throw new FormError(e);
 }
+
+const PROJECT_STATUSES: ProjectStatus[] = ["active", "on_hold", "completed"];
 
 function normalizeProject(input: ProjectInput): ProjectInput {
   const taskRates: Record<string, Cents> = {};
@@ -85,7 +96,13 @@ function normalizeProject(input: ProjectInput): ProjectInput {
     taskRates,
     billingCadence: input.billingCadence,
     wepmProjectId: input.wepmProjectId?.trim() || undefined,
-    active: input.active !== false,
+    status: input.status,
+    startDate: input.startDate || undefined,
+    endDate: input.endDate || undefined,
+    // Client projects have a billable budget; internal projects a cost budget.
+    budgetCents: input.customerId ? input.budgetCents : undefined,
+    budgetMinutes: input.customerId ? input.budgetMinutes : undefined,
+    costBudgetCents: input.customerId ? undefined : input.costBudgetCents,
   };
 }
 

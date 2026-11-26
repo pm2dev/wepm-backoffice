@@ -5,6 +5,7 @@
  * records and payments are internally consistent.
  */
 import { markInvoiced } from "@/lib/domain/billing";
+import { SCHEMA_VERSION } from "@/lib/domain/empty";
 import { setPaymentDone, syncQuickBooks } from "@/lib/domain/quickbooks-sync";
 import { listCharges, setChargeAmount, setChargesPaid } from "@/lib/domain/expenses";
 import { finalizePayroll, recordPayment, draftKey, addAdjustment, type IdFactory } from "@/lib/domain/payroll";
@@ -52,7 +53,7 @@ function entries(
 export function buildSampleData(): BackofficeData {
   const id = sequentialIds();
   let data: BackofficeData = {
-    schemaVersion: 7,
+    schemaVersion: SCHEMA_VERSION,
     contractors: [
       {
         id: "c_maya",
@@ -113,11 +114,11 @@ export function buildSampleData(): BackofficeData {
         id: "p_acme", name: "Member portal", customerId: "cust_acme", billable: true, billingMethod: "task",
         // Design intentionally has no rate yet — demonstrates the missing-task-rate state.
         taskRates: { Development: 12500, Meetings: 7500 },
-        wepmProjectId: "wepm_p_201", active: true,
+        wepmProjectId: "wepm_p_201", status: "active", startDate: "2026-08-03", budgetCents: 6000000,
       },
-      { id: "p_northwind", name: "Data migration", customerId: "cust_northwind", billable: true, billingMethod: "hourly", hourlyRateCents: 14000, taskRates: {}, wepmProjectId: "wepm_p_202", active: true },
-      { id: "p_northwind_disc", name: "Discovery", customerId: "cust_northwind", billable: true, billingMethod: "hourly", hourlyRateCents: 15000, taskRates: {}, billingCadence: "monthly", active: true },
-      { id: "p_internal", name: "Internal operations", customerId: null, billable: false, billingMethod: "hourly", taskRates: {}, wepmProjectId: "wepm_p_200", active: true },
+      { id: "p_northwind", name: "Data migration", customerId: "cust_northwind", billable: true, billingMethod: "hourly", hourlyRateCents: 14000, taskRates: {}, wepmProjectId: "wepm_p_202", status: "active", startDate: "2026-09-14", budgetCents: 4200000, budgetMinutes: 18000 },
+      { id: "p_northwind_disc", name: "Discovery", customerId: "cust_northwind", billable: true, billingMethod: "hourly", hourlyRateCents: 15000, taskRates: {}, billingCadence: "monthly", status: "on_hold", startDate: "2026-07-06" },
+      { id: "p_internal", name: "Internal operations", customerId: null, billable: false, billingMethod: "hourly", taskRates: {}, wepmProjectId: "wepm_p_200", status: "active", costBudgetCents: 1500000 },
     ],
     billingRecords: [],
     invoiceReceipts: [],

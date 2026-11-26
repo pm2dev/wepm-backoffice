@@ -57,6 +57,14 @@ export type Customer = {
   notes?: string;
 };
 
+export type ProjectStatus = "active" | "on_hold" | "completed";
+
+export const PROJECT_STATUS_LABELS: Record<ProjectStatus, string> = {
+  active: "Active",
+  on_hold: "On hold",
+  completed: "Completed",
+};
+
 export type Project = {
   id: string;
   name: string;
@@ -71,7 +79,15 @@ export type Project = {
   taskRates: Record<string, Cents>;
   billingCadence?: BillingCadence;
   wepmProjectId?: string;
-  active: boolean;
+  status: ProjectStatus;
+  startDate?: ISODate;
+  endDate?: ISODate;
+  /** Client projects: lifetime budget in billable dollars (billable hours × billing rate + billable expenses). */
+  budgetCents?: Cents;
+  /** Client projects: optional lifetime budget in billable minutes. */
+  budgetMinutes?: number;
+  /** Internal projects: lifetime cost budget. */
+  costBudgetCents?: Cents;
 };
 
 /** A billing line preserved when hours are marked invoiced. */
@@ -321,7 +337,7 @@ export type IntegrationSettings = {
 };
 
 export type BackofficeData = {
-  schemaVersion: 7;
+  schemaVersion: 8;
   contractors: Contractor[];
   rates: ContractorRate[];
   projects: Project[];
