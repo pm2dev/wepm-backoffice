@@ -17,3 +17,7 @@ Issues are tracked in GitHub Issues for pm2dev/wepm-backoffice (via `gh`). See `
 ### Domain docs
 
 Single-context: one `GLOSSARY.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+
+## Branches
+
+Open every pull request against `develop`, never `main`. `develop` deploys to the Railway `development` environment; `main` deploys to `production` and only receives pull requests from `develop`. See `docs/railway.md`.

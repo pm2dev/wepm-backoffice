@@ -7,6 +7,15 @@ One Railway **project** with two **environments** — `development` and `product
 | **Postgres** | Railway's PostgreSQL database |
 | **backoffice** | This repository (Next.js server) |
 
+## Branches and deploys
+
+| Branch | Deploys to |
+|---|---|
+| `develop` | the `development` environment |
+| `main` | the `production` environment |
+
+Every pull request targets `develop`. Once a change has been checked in development, a pull request from `develop` to `main` releases it to production. Nothing is merged into `main` any other way.
+
 The repo already contains what Railway needs: `railway.json` (build, start, health check), `npm run build` (generates the Prisma client and builds), and `npm run start:prod` (applies database migrations, then starts the server). Node 22.12+ is declared in `package.json`.
 
 ## Set up the development environment
@@ -17,7 +26,7 @@ The repo already contains what Railway needs: `railway.json` (build, start, heal
 4. **Pick the branch.** `backoffice` service → **Settings → Source → Branch** → `develop`. Every push to `develop` redeploys the dev environment.
 5. **Set variables.** `backoffice` service → **Variables**:
 
-   | Variable | development | production (later) |
+   | Variable | development | production |
    |---|---|---|
    | `DATABASE_URL` | `${{Postgres.DATABASE_URL}}` | `${{Postgres.DATABASE_URL}}` |
    | `APP_ENV` | `development` | `production` |
