@@ -178,7 +178,7 @@ export function addAdjustment(
   if (!Number.isSafeInteger(input.amountCents) || input.amountCents <= 0) throw new DomainError("Enter an amount greater than $0.");
   if (!input.description.trim()) throw new DomainError("Add a short description.");
   const adjustment: Adjustment = {
-    id: newId(input.kind === "bonus" ? "bon" : "rei"),
+    id: newId(input.kind === "bonus" ? "bon" : input.kind === "fixed_fee" ? "fee" : "rei"),
     contractorId: contractor.id,
     kind: input.kind,
     description: input.description.trim(),

@@ -162,6 +162,8 @@ export type ContractorStats = {
   /** Hourly earnings: finalized snapshots + unfinalized/historical hours at the rate on each work date. */
   hourlyEarningsCents: Cents;
   bonusCents: Cents;
+  /** Fixed-fee work from Contractor services expenses. */
+  fixedFeeCents: Cents;
   /** Hourly + bonuses. Reimbursements are never included. */
   totalEarningsCents: Cents;
   reimbursementCents: Cents;
@@ -211,6 +213,8 @@ export function contractorStats(data: BackofficeData, contractorId: string, toda
   const adjustments = data.adjustments.filter((a) => a.contractorId === contractorId);
   const bonusCents = adjustments.filter((a) => a.kind === "bonus").reduce((s, a) => s + a.amountCents, 0);
   const reimbursementCents = adjustments.filter((a) => a.kind === "reimbursement").reduce((s, a) => s + a.amountCents, 0);
+  // Fixed-fee work (Contractor services expenses) is earnings, like bonuses.
+  const fixedFeeCents = adjustments.filter((a) => a.kind === "fixed_fee").reduce((s, a) => s + a.amountCents, 0);
 
   const payments = data.payments.filter((p) => p.contractorId === contractorId);
   const totalPaidCents = payments.reduce((s, p) => s + p.allocations.reduce((t, a) => t + a.amountCents, 0), 0);
@@ -229,7 +233,8 @@ export function contractorStats(data: BackofficeData, contractorId: string, toda
     historicalMinutes,
     hourlyEarningsCents: hourly,
     bonusCents,
-    totalEarningsCents: hourly + bonusCents,
+    fixedFeeCents,
+    totalEarningsCents: hourly + bonusCents + fixedFeeCents,
     reimbursementCents,
     missingRateMinutes,
     missingRateRange: missingFrom && missingTo ? { from: missingFrom, to: missingTo } : undefined,

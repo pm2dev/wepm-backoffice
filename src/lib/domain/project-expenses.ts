@@ -1,8 +1,9 @@
 import { compareDates, isISODate, type ISODate } from "./dates";
 import type { Cents } from "./money";
 import { FormError } from "./billing";
-import { DomainError, randomId, type IdFactory } from "./payroll";
-import type { BackofficeData, ExpenseCategory, ProjectExpense } from "./types";
+import { addAdjustment, DomainError, paidAgainst, randomId, type IdFactory } from "./payroll";
+import { nextPayday } from "./schedule";
+import type { Adjustment, AdjustmentKind, BackofficeData, ExpenseCategory, ExpensePayer, ProjectExpense } from "./types";
 
 export const EXPENSE_CATEGORY_LABELS: Record<ExpenseCategory, string> = {
   software: "Software",
@@ -39,7 +40,10 @@ function validate(data: BackofficeData, input: ProjectExpenseInput) {
   if (!(input.category in EXPENSE_CATEGORY_LABELS)) e.category = "Choose a category.";
   if (input.projectId && !data.projects.some((p) => p.id === input.projectId)) e.projectId = "Choose a project or Company.";
   if (input.billable && !canBillExpensesTo(data, input.projectId)) e.billable = "Only expenses on a billable customer project can be billed.";
-  if (input.paidBy.kind !== "account" || !data.paymentAccounts.some((a) => a.id === input.paidBy.accountId)) e.paidBy = "Choose the card or account it was paid from.";
+  const payer = input.paidBy;
+  if (payer.kind === "account" ? !data.paymentAccounts.some((a) => a.id === payer.accountId) : !data.contractors.some((c) => c.id === payer.contractorId)) {
+    e.paidBy = "Choose the card, account or contractor that paid.";
+  }
   const url = input.receiptUrl?.trim();
   if (url && !isWebUrl(url)) e.receiptUrl = "Enter a web link starting with https://, or leave it blank.";
   if (Object.keys(e).length) throw new FormError(e);
@@ -55,29 +59,107 @@ function fields(input: ProjectExpenseInput): ProjectExpenseInput {
     category: input.category,
     projectId: input.projectId || null,
     billable: !!input.billable && !!input.projectId,
-    paidBy: { kind: "account", accountId: input.paidBy.accountId },
+    paidBy: payerOf(input.paidBy),
     receiptUrl: input.receiptUrl?.trim() || undefined,
     notes: input.notes?.trim() || undefined,
   };
 }
 
+function payerOf(p: ExpensePayer): ExpensePayer {
+  return p.kind === "account" ? { kind: "account", accountId: p.accountId } : { kind: "contractor", contractorId: p.contractorId };
+}
+
+// ---------------------------------------------------------------------------
+// Contractor-paid expenses: what the contractor is owed
+// ---------------------------------------------------------------------------
+
+/** Contractor services are fixed-fee work (earnings); anything else a contractor paid is a reimbursement. */
+export function owedKindFor(category: ExpenseCategory): AdjustmentKind {
+  return category === "contractor_services" ? "fixed_fee" : "reimbursement";
+}
+
+/** The amount owed to a contractor for this expense, if a contractor paid it. */
+export function owedFor(data: BackofficeData, expenseId: string): Adjustment | undefined {
+  return data.adjustments.find((a) => a.projectExpenseId === expenseId);
+}
+
+/** How much of the amount owed has been paid. */
+export function owedPaidCents(data: BackofficeData, owed: Adjustment): Cents {
+  return paidAgainst(data, { kind: owed.kind, id: owed.id });
+}
+
+/** e.g. "Apple: Test iPhone · Member portal", so What's due shows where it came from. */
+function owedDescription(data: BackofficeData, x: Pick<ProjectExpense, "vendor" | "description" | "projectId">): string {
+  const project = x.projectId ? data.projects.find((p) => p.id === x.projectId)?.name : undefined;
+  return [x.description ? `${x.vendor}: ${x.description}` : x.vendor, project ?? "Company"].join(" · ");
+}
+
+function createOwed(data: BackofficeData, expense: ProjectExpense, today: ISODate, newId: IdFactory): BackofficeData {
+  if (expense.paidBy.kind !== "contractor") return data;
+  const r = addAdjustment(
+    data,
+    { contractorId: expense.paidBy.contractorId, kind: owedKindFor(expense.category), description: owedDescription(data, expense), amountCents: expense.amountCents },
+    today,
+    newId,
+  );
+  return { ...r.data, adjustments: r.data.adjustments.map((a) => (a.id === r.adjustment.id ? { ...a, projectExpenseId: expense.id } : a)) };
+}
+
 export function addProjectExpense(data: BackofficeData, input: ProjectExpenseInput, today: ISODate, newId: IdFactory = randomId) {
   validate(data, input);
   const expense: ProjectExpense = { id: newId("pex"), ...fields(input), createdOn: today };
-  return { data: { ...data, projectExpenses: [...data.projectExpenses, expense] }, expense };
+  const next = createOwed({ ...data, projectExpenses: [...data.projectExpenses, expense] }, expense, today, newId);
+  return { data: next, expense };
 }
 
-export function updateProjectExpense(data: BackofficeData, id: string, input: ProjectExpenseInput) {
+/**
+ * Edit an expense. While nothing has been paid against what a contractor is
+ * owed, that amount follows the edit (including switching who paid). Once any
+ * payment is applied, the amount, payee and kind are locked.
+ */
+export function updateProjectExpense(data: BackofficeData, id: string, input: ProjectExpenseInput, today: ISODate, newId: IdFactory = randomId) {
   const existing = data.projectExpenses.find((x) => x.id === id);
   if (!existing) throw new DomainError("Expense not found.");
   validate(data, input);
   const expense: ProjectExpense = { ...existing, ...fields(input) };
-  return { data: { ...data, projectExpenses: data.projectExpenses.map((x) => (x.id === id ? expense : x)) }, expense };
+  let next: BackofficeData = { ...data, projectExpenses: data.projectExpenses.map((x) => (x.id === id ? expense : x)) };
+
+  const owed = owedFor(data, id);
+  if (owed && owedPaidCents(data, owed) > 0) {
+    const samePayee = expense.paidBy.kind === "contractor" && expense.paidBy.contractorId === owed.contractorId;
+    if (!samePayee || expense.amountCents !== owed.amountCents || owedKindFor(expense.category) !== owed.kind) {
+      throw new FormError({ form: "Payments have already been applied to what's owed for this expense, so its amount, category type and who paid can't change." });
+    }
+    next = { ...next, adjustments: next.adjustments.map((a) => (a.id === owed.id ? { ...a, description: owedDescription(data, expense) } : a)) };
+    return { data: next, expense };
+  }
+
+  if (owed && expense.paidBy.kind === "contractor") {
+    const contractor = data.contractors.find((c) => c.id === (expense.paidBy as { contractorId: string }).contractorId)!;
+    const updated: Adjustment = {
+      ...owed,
+      contractorId: contractor.id,
+      kind: owedKindFor(expense.category),
+      description: owedDescription(data, expense),
+      amountCents: expense.amountCents,
+      dueDate: contractor.id === owed.contractorId ? owed.dueDate : nextPayday(contractor, today),
+    };
+    return { data: { ...next, adjustments: next.adjustments.map((a) => (a.id === owed.id ? updated : a)) }, expense };
+  }
+  if (owed) next = { ...next, adjustments: next.adjustments.filter((a) => a.id !== owed.id) };
+  return { data: createOwed(next, expense, today, newId), expense };
 }
 
+/** Delete an expense (and what a contractor is owed for it, if nothing has been paid against that). */
 export function deleteProjectExpense(data: BackofficeData, id: string): BackofficeData {
   if (!data.projectExpenses.some((x) => x.id === id)) throw new DomainError("Expense not found.");
-  return { ...data, projectExpenses: data.projectExpenses.filter((x) => x.id !== id) };
+  const owed = owedFor(data, id);
+  if (owed && owedPaidCents(data, owed) > 0) throw new DomainError("Payments have already been applied to what's owed for this expense, so it can't be deleted.");
+  return {
+    ...data,
+    projectExpenses: data.projectExpenses.filter((x) => x.id !== id),
+    adjustments: owed ? data.adjustments.filter((a) => a.id !== owed.id) : data.adjustments,
+  };
 }
 
 /** Expenses for one project (or the company with null), newest first. */

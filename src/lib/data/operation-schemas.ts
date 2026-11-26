@@ -74,7 +74,7 @@ const projectExpenseInput = z.strictObject({
   category: z.enum(["software", "hardware", "travel", "contractor_services", "other"]),
   projectId: id.nullable(),
   billable: z.boolean(),
-  paidBy: z.strictObject({ kind: z.literal("account"), accountId: id }),
+  paidBy: z.discriminatedUnion("kind", [z.strictObject({ kind: z.literal("account"), accountId: id }), z.strictObject({ kind: z.literal("contractor"), contractorId: id })]),
   receiptUrl: text(2000).optional(),
   notes: text(2000).optional(),
 });
@@ -92,7 +92,7 @@ export const OPERATION_SCHEMAS = {
       method,
       note: text(1000).optional(),
       allocations: z
-        .array(z.strictObject({ obligation: z.strictObject({ kind: z.enum(["payroll", "bonus", "reimbursement"]), id }), amountCents: cents }))
+        .array(z.strictObject({ obligation: z.strictObject({ kind: z.enum(["payroll", "bonus", "reimbursement", "fixed_fee"]), id }), amountCents: cents }))
         .max(200),
     }),
     today,
@@ -128,7 +128,7 @@ export const OPERATION_SCHEMAS = {
     today,
   }),
   addProjectExpense: z.strictObject({ input: projectExpenseInput, today }),
-  updateProjectExpense: z.strictObject({ id, input: projectExpenseInput }),
+  updateProjectExpense: z.strictObject({ id, input: projectExpenseInput, today }),
   deleteProjectExpense: z.strictObject({ id }),
   addBillingRate: z.strictObject({ input: z.strictObject({ projectId: id, task: text(120).nullable(), effectiveDate: date, rateCents: cents }) }),
   removeBillingRate: z.strictObject({ id }),

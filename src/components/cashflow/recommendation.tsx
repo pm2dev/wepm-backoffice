@@ -18,7 +18,7 @@ import { formatCents, formatHours } from "@/lib/domain/money";
 import { routes } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 
-const KIND_LABEL: Record<Suggestion["kind"], string> = { payroll: "Payroll", bonus: "Bonus", reimbursement: "Reimbursement", bill: "Bill", subscription: "Subscription" };
+const KIND_LABEL: Record<Suggestion["kind"], string> = { payroll: "Payroll", bonus: "Bonus", reimbursement: "Reimbursement", fixed_fee: "Fixed fee", bill: "Bill", subscription: "Subscription" };
 
 export function RecommendationRoute() {
   const id = useSearchParams().get("id") ?? "";

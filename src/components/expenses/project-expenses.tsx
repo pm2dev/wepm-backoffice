@@ -16,8 +16,34 @@ import { accountLabel } from "@/lib/domain/expenses";
 import { assignmentLabel } from "@/lib/domain/labels";
 import { centsToInput, formatCents, parseDollars } from "@/lib/domain/money";
 import { DomainError } from "@/lib/domain/payroll";
-import { canBillExpensesTo, EXPENSE_CATEGORIES, EXPENSE_CATEGORY_LABELS, expenseTotals, type ProjectExpenseInput } from "@/lib/domain/project-expenses";
-import type { BackofficeData, ExpenseCategory, ProjectExpense } from "@/lib/domain/types";
+import { canBillExpensesTo, EXPENSE_CATEGORIES, EXPENSE_CATEGORY_LABELS, expenseTotals, owedFor, owedKindFor, owedPaidCents, type ProjectExpenseInput } from "@/lib/domain/project-expenses";
+import type { Adjustment, BackofficeData, ExpenseCategory, ExpensePayer, ProjectExpense } from "@/lib/domain/types";
+
+function payerLabel(data: BackofficeData, x: ProjectExpense): string {
+  if (x.paidBy.kind === "contractor") {
+    const id = x.paidBy.contractorId;
+    return `Paid by ${data.contractors.find((c) => c.id === id)?.name ?? "a contractor"}`;
+  }
+  const id = x.paidBy.accountId;
+  const account = data.paymentAccounts.find((a) => a.id === id);
+  return account ? accountLabel(account) : "Unknown account";
+}
+
+/** Whether a contractor has been paid back (or paid the fee) for this expense. */
+function OwedBadge({ data, owed }: { data: BackofficeData; owed: Adjustment }) {
+  const paid = owedPaidCents(data, owed);
+  const what = owed.kind === "fixed_fee" ? "Fee" : "Reimbursement";
+  if (paid >= owed.amountCents) return <Badge tone="success">{what} paid</Badge>;
+  if (paid > 0) return <Badge tone="warning">{what} partly paid · {formatCents(owed.amountCents - paid)} left</Badge>;
+  return <Badge tone="warning">{what} due {formatDate(owed.dueDate)}</Badge>;
+}
+
+const encodePayer = (p: ExpensePayer) => (p.kind === "account" ? `account:${p.accountId}` : `contractor:${p.contractorId}`);
+function decodePayer(v: string): ExpensePayer {
+  const [kind, ...rest] = v.split(":");
+  const id = rest.join(":");
+  return kind === "contractor" ? { kind: "contractor", contractorId: id } : { kind: "account", accountId: id };
+}
 import { routes } from "@/lib/routes";
 
 /** A list of one-off expenses with totals, edit and delete. */
@@ -40,14 +66,14 @@ export function ProjectExpenseList({ data, expenses, showProject, emptyText }: {
     <Card>
       <ul className="divide-y divide-slate-200">
         {expenses.map((x) => {
-          const account = data.paymentAccounts.find((a) => a.id === x.paidBy.accountId);
+          const owed = owedFor(data, x.id);
           return (
             <li key={x.id} className="flex flex-col gap-2 p-4 sm:flex-row sm:items-start sm:justify-between">
               <div className="min-w-0">
                 <p className="font-medium text-slate-900">{x.vendor}</p>
                 {x.description ? <p className="text-sm text-slate-700">{x.description}</p> : null}
                 <p className="text-xs text-slate-500">
-                  {formatDate(x.date, { year: true })} · {account ? accountLabel(account) : "Unknown account"}
+                  {formatDate(x.date, { year: true })} · {payerLabel(data, x)}
                   {showProject ? (
                     <>
                       {" · "}
@@ -58,6 +84,7 @@ export function ProjectExpenseList({ data, expenses, showProject, emptyText }: {
                 <div className="mt-1.5 flex flex-wrap gap-1.5">
                   <Badge>{EXPENSE_CATEGORY_LABELS[x.category]}</Badge>
                   {x.billable ? <Badge tone="info">Billable at cost</Badge> : null}
+                  {owed ? <OwedBadge data={data} owed={owed} /> : null}
                   {x.receiptUrl ? (
                     <a href={x.receiptUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-blue-700 underline-offset-2 hover:underline">
                       Receipt <ExternalLink className="size-3" aria-hidden />
@@ -121,7 +148,7 @@ export function AddProjectExpenseDialog({ data, projectId, label = "Add expense"
 
 function EditProjectExpenseDialog({ data, expense }: { data: BackofficeData; expense: ProjectExpense }) {
   const [open, setOpen] = useState(false);
-  const { mutate } = useBackoffice();
+  const { today, mutate } = useBackoffice();
   const notify = useNotice();
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -137,7 +164,7 @@ function EditProjectExpenseDialog({ data, expense }: { data: BackofficeData; exp
             expense={expense}
             submitLabel="Save changes"
             onSubmit={async (input) => {
-              await mutate((r) => r.updateProjectExpense(expense.id, input));
+              await mutate((r) => r.updateProjectExpense(expense.id, input, today));
               notify(`${input.vendor.trim()} saved.`);
               setOpen(false);
             }}
@@ -170,7 +197,7 @@ function ProjectExpenseForm({
     category: expense?.category ?? ("software" as ExpenseCategory),
     projectId: expense ? (expense.projectId ?? "") : (defaultProjectId ?? ""),
     billable: expense?.billable ?? false,
-    accountId: expense?.paidBy.accountId ?? data.paymentAccounts[0]?.id ?? "",
+    payer: expense ? encodePayer(expense.paidBy) : data.paymentAccounts[0] ? `account:${data.paymentAccounts[0].id}` : "",
     receiptUrl: expense?.receiptUrl ?? "",
     notes: expense?.notes ?? "",
   });
@@ -193,7 +220,7 @@ function ProjectExpenseForm({
         category: v.category,
         projectId: v.projectId || null,
         billable: billableAllowed && v.billable,
-        paidBy: { kind: "account", accountId: v.accountId },
+        paidBy: decodePayer(v.payer),
         receiptUrl: v.receiptUrl,
         notes: v.notes,
       });
@@ -237,12 +264,28 @@ function ProjectExpenseForm({
             ))}
           </Select>
         </Field>
-        <Field label="Paid from" htmlFor="pe-account" error={errors.paidBy}>
-          <Select id="pe-account" value={v.accountId} onChange={set("accountId")} {...inv("paidBy")}>
-            {data.paymentAccounts.length === 0 ? <option value="">Add a card or account under Bills first</option> : null}
-            {data.paymentAccounts.map((a) => (
-              <option key={a.id} value={a.id}>{accountLabel(a)}</option>
-            ))}
+        <Field
+          label="Paid by"
+          htmlFor="pe-account"
+          error={errors.paidBy}
+          hint={v.payer.startsWith("contractor:") ? (owedKindFor(v.category) === "fixed_fee" ? "They're owed this fee on their next payday. Counts as their earnings." : "They're owed a reimbursement on their next payday.") : undefined}
+        >
+          <Select id="pe-account" value={v.payer} onChange={set("payer")} {...inv("paidBy")}>
+            {data.paymentAccounts.length === 0 && data.contractors.length === 0 ? <option value="">Add a card or account under Bills first</option> : null}
+            {data.paymentAccounts.length ? (
+              <optgroup label="Your cards and accounts">
+                {data.paymentAccounts.map((a) => (
+                  <option key={a.id} value={`account:${a.id}`}>{accountLabel(a)}</option>
+                ))}
+              </optgroup>
+            ) : null}
+            {data.contractors.length ? (
+              <optgroup label="A contractor (owed back)">
+                {data.contractors.map((c) => (
+                  <option key={c.id} value={`contractor:${c.id}`}>{c.name}</option>
+                ))}
+              </optgroup>
+            ) : null}
           </Select>
         </Field>
       </div>

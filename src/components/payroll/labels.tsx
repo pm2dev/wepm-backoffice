@@ -3,10 +3,10 @@ import { daysBetween, formatDate, formatRange, type ISODate } from "@/lib/domain
 import type { Obligation, ObligationStatus } from "@/lib/domain/payroll";
 import type { ObligationKind } from "@/lib/domain/types";
 
-export const KIND_LABEL: Record<ObligationKind, string> = { payroll: "Payroll", bonus: "Bonus", reimbursement: "Reimbursement" };
+export const KIND_LABEL: Record<ObligationKind, string> = { payroll: "Payroll", bonus: "Bonus", reimbursement: "Reimbursement", fixed_fee: "Fixed fee" };
 
 export function KindBadge({ kind }: { kind: ObligationKind }) {
-  return <Badge tone={kind === "payroll" ? "neutral" : kind === "bonus" ? "info" : "sample"}>{KIND_LABEL[kind]}</Badge>;
+  return <Badge tone={kind === "payroll" ? "neutral" : kind === "bonus" || kind === "fixed_fee" ? "info" : "sample"}>{KIND_LABEL[kind]}</Badge>;
 }
 
 const STATUS: Record<ObligationStatus, { label: string; tone: "info" | "danger" | "success" | "warning" | "neutral" }> = {
