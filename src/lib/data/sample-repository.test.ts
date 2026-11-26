@@ -37,6 +37,15 @@ describe("SampleRepository storage", () => {
     expect(JSON.parse(storage.items.get(KEY)!).schemaVersion).toBe(SCHEMA_VERSION);
   });
 
+  it("upgrades a save from the previous version and moves it to the current key", async () => {
+    const old = "backoffice.sample-data.v7";
+    install({ [old]: JSON.stringify({ ...buildSampleData(), schemaVersion: 7, projects: [{ id: "p1", name: "Old", active: false }] }) });
+    const data = await new SampleRepository().load();
+    expect(data.projects).toEqual([{ id: "p1", name: "Old", status: "completed" }]);
+    expect(storage.items.has(old)).toBe(false);
+    expect(JSON.parse(storage.items.get(KEY)!).schemaVersion).toBe(SCHEMA_VERSION);
+  });
+
   it("ignores saves older than the oldest upgradable version", async () => {
     install({ "backoffice.sample-data.v6": JSON.stringify({ schemaVersion: 6, customers: [] }) });
     expect((await new SampleRepository().load()).customers.length).toBeGreaterThan(0);

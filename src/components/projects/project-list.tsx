@@ -13,7 +13,7 @@ import { useNotice } from "@/components/layout/notice";
 import { useBackoffice } from "@/lib/data/backoffice-provider";
 import { projectSummary } from "@/lib/domain/billing";
 import { formatCents, formatHours } from "@/lib/domain/money";
-import type { BackofficeData, Project } from "@/lib/domain/types";
+import { PROJECT_STATUS_LABELS, type BackofficeData, type Project, type ProjectStatus } from "@/lib/domain/types";
 import { routes } from "@/lib/routes";
 import { ProjectForm } from "./project-form";
 import { ProjectsTabs } from "./projects-tabs";
@@ -42,7 +42,7 @@ export function ProjectRows({ data, projects }: { data: BackofficeData; projects
                     <p className="text-sm text-slate-600">{customer?.name ?? "WEPM Labs (internal)"}</p>
                     <div className="mt-1.5 flex flex-wrap gap-1.5">
                       <Badge tone={p.billable && p.customerId ? "info" : "neutral"}>{billingLabel(p)}</Badge>
-                      {p.active ? null : <Badge>Inactive</Badge>}
+                      {p.status === "active" ? null : <Badge tone={p.status === "on_hold" ? "warning" : "neutral"}>{PROJECT_STATUS_LABELS[p.status]}</Badge>}
                       {p.wepmProjectId ? null : <Badge tone="warning">No wepm.app ID</Badge>}
                     </div>
                   </div>
@@ -105,7 +105,7 @@ export function AddProjectDialog({ data, customerId, label = "Add project" }: { 
 
 export function ProjectListPage() {
   const { state } = useBackoffice();
-  const [showInactive, setShowInactive] = useState(false);
+  const [status, setStatus] = useState<ProjectStatus | "all">("active");
   return (
     <>
       <PageHeader title="Projects & billing" description="Customer and internal projects, billability, and billing rates." actions={state.status === "ready" ? <AddProjectDialog data={state.data} /> : null} />
@@ -117,21 +117,33 @@ export function ProjectListPage() {
           <EmptyState title="No projects yet" />
         ) : (
           <div className="space-y-4">
-            {state.data.projects.some((p) => !p.active) ? (
-              <label className="inline-flex min-h-11 cursor-pointer items-center gap-2 text-sm text-slate-700">
-                <input type="checkbox" className="size-5 accent-slate-900" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} />
-                Show inactive
-              </label>
-            ) : null}
-            <ProjectRows
-              data={state.data}
-              projects={state.data.projects
-                .filter((p) => p.active || showInactive)
-                .sort((a, b) => Number(!a.customerId) - Number(!b.customerId) || a.name.localeCompare(b.name))}
-            />
+            <StatusFilter projects={state.data.projects} value={status} onChange={setStatus} />
+            {(() => {
+              const shown = state.data.projects
+                .filter((p) => status === "all" || p.status === status)
+                .sort((a, b) => Number(!a.customerId) - Number(!b.customerId) || a.name.localeCompare(b.name));
+              return shown.length ? <ProjectRows data={state.data} projects={shown} /> : <EmptyState title={`No ${status === "all" ? "" : PROJECT_STATUS_LABELS[status].toLowerCase() + " "}projects`} />;
+            })()}
           </div>
         )
       ) : null}
     </>
+  );
+}
+
+function StatusFilter({ projects, value, onChange }: { projects: Project[]; value: ProjectStatus | "all"; onChange: (v: ProjectStatus | "all") => void }) {
+  const options: [ProjectStatus | "all", string][] = [...(Object.entries(PROJECT_STATUS_LABELS) as [ProjectStatus, string][]), ["all", "All"]];
+  return (
+    <div role="radiogroup" aria-label="Show projects" className="flex flex-wrap gap-2">
+      {options.map(([k, label]) => {
+        const count = k === "all" ? projects.length : projects.filter((p) => p.status === k).length;
+        return (
+          <label key={k} className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-full border border-slate-300 px-3 text-sm text-slate-700 has-checked:border-slate-900 has-checked:bg-slate-900 has-checked:text-white has-focus-visible:outline-2 has-focus-visible:outline-blue-600">
+            <input type="radio" name="project-status" className="sr-only" checked={value === k} onChange={() => onChange(k)} />
+            {label} <span className="tabular opacity-70">{count}</span>
+          </label>
+        );
+      })}
+    </div>
   );
 }

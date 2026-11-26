@@ -21,7 +21,16 @@ export type Migration = {
 export const OLDEST_MIGRATABLE_VERSION = 7;
 
 /** In order, one per version bump after OLDEST_MIGRATABLE_VERSION. */
-export const MIGRATIONS: Migration[] = [];
+export const MIGRATIONS: Migration[] = [
+  {
+    from: 7,
+    description: "Projects: `active` flag becomes a status (active → Active, inactive → Completed).",
+    up: (d) => ({
+      ...d,
+      projects: ((d.projects as StoredDocument[] | undefined) ?? []).map(({ active, ...p }) => ({ ...p, status: active === false ? "completed" : "active" })),
+    }),
+  },
+];
 
 export class MigrationError extends Error {}
 

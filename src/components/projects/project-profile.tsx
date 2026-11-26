@@ -14,7 +14,8 @@ import { BackLink } from "@/components/payroll/back-link";
 import { useBackoffice } from "@/lib/data/backoffice-provider";
 import { billingBreakdown, CADENCE_LABEL, projectSummary, projectTasks } from "@/lib/domain/billing";
 import { formatCents, formatHours } from "@/lib/domain/money";
-import type { BackofficeData, Project } from "@/lib/domain/types";
+import { PROJECT_STATUS_LABELS, type BackofficeData, type Project } from "@/lib/domain/types";
+import { formatDate } from "@/lib/domain/dates";
 import { routes } from "@/lib/routes";
 import { BreakdownCard } from "./breakdown-card";
 import { BillingRecords } from "./invoiced";
@@ -54,7 +55,8 @@ function ProjectProfile({ data, project: p }: { data: BackofficeData; project: P
       />
       <div className="mb-6 flex flex-wrap gap-1.5">
         <Badge tone={p.billable && p.customerId ? "info" : "neutral"}>{billingLabel(p)}</Badge>
-        {p.active ? <Badge tone="success">Active</Badge> : <Badge>Inactive</Badge>}
+        <Badge tone={p.status === "active" ? "success" : p.status === "on_hold" ? "warning" : "neutral"}>{PROJECT_STATUS_LABELS[p.status]}</Badge>
+        {p.startDate || p.endDate ? <Badge>{p.startDate ? formatDate(p.startDate, { year: true }) : "No start date"} – {p.endDate ? formatDate(p.endDate, { year: true }) : "ongoing"}</Badge> : null}
         {cadence && p.billable ? <Badge>{CADENCE_LABEL[cadence]} billing</Badge> : null}
       </div>
 
@@ -63,6 +65,7 @@ function ProjectProfile({ data, project: p }: { data: BackofficeData; project: P
         <Stat label="Uninvoiced" value={p.billable && p.customerId ? formatCents(s.uninvoicedAmountCents) : "Not billed"} sub={s.uninvoicedMinutes ? formatHours(s.uninvoicedMinutes) : undefined} />
         <Stat label="Invoiced to date" value={formatCents(s.invoicedAmountCents)} />
         <Stat label="wepm.app project ID" value={p.wepmProjectId ?? "Not linked"} small />
+        {budgetText(p) ? <Stat label={p.customerId ? "Budget" : "Cost budget"} value={budgetText(p)!} small /> : null}
       </section>
 
       <div className="mt-8 grid gap-8 xl:grid-cols-[1fr_22rem]">
@@ -149,4 +152,10 @@ function EditProjectDialog({ data, project }: { data: BackofficeData; project: P
       ) : null}
     </Dialog>
   );
+}
+
+function budgetText(p: Project): string | null {
+  if (!p.customerId) return p.costBudgetCents ? formatCents(p.costBudgetCents) : null;
+  const parts = [p.budgetCents ? formatCents(p.budgetCents) : null, p.budgetMinutes ? formatHours(p.budgetMinutes) : null].filter(Boolean);
+  return parts.length ? parts.join(" · ") : null;
 }

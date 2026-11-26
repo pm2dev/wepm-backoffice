@@ -60,7 +60,12 @@ const projectInput = z.strictObject({
   taskRates: z.record(text(120), cents).refine((r) => Object.keys(r).length <= 200, "Too many task rates."),
   billingCadence: cadence.optional(),
   wepmProjectId: text(120).optional(),
-  active: z.boolean(),
+  status: z.enum(["active", "on_hold", "completed"]),
+  startDate: date.optional(),
+  endDate: date.optional(),
+  budgetCents: cents.optional(),
+  budgetMinutes: z.number().int().min(0).max(100_000_000).optional(),
+  costBudgetCents: cents.optional(),
 });
 
 const noArgs = z.strictObject({});

@@ -1,6 +1,6 @@
 import type { BackofficeData } from "./types";
 
-export const SCHEMA_VERSION = 7 as const;
+export const SCHEMA_VERSION = 8 as const;
 
 /** A brand-new workspace with no records. */
 export function emptyData(): BackofficeData {
