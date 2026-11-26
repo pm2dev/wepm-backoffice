@@ -4,7 +4,7 @@ Slashbin is a **webhook gateway**. It receives webhooks from source systems, ver
 
 Slashbin's setup guide: <https://www.slashbin.io/docs/recipes/quickbooks-webhook-sync>
 
-## Current setup (sandbox, verified 2026-11-25)
+## Current setup (sandbox, verified 2026-11-25 US time)
 
 The QuickBooks → Slashbin leg is set up and has delivered a live event. Slashbin → Backoffice is not connected yet, since no destination is configured.
 
@@ -33,16 +33,16 @@ Intuit moved QuickBooks webhooks to CloudEvents. The cutover was extended to 202
   {
     "specversion": "1.0",
     "id": "c8219314-079e-4ab7-a3a2-6c97638e82ae-Customer-58",
-    "source": "intuit.gNrxXlevKjGOz7qbg3RqahZaNpT9qtJeVrHwh4rI4vY=",
+    "source": "intuit.<app-identifier>",
     "type": "qbo.customer.created.v1",
     "time": "2026-11-26T04:08:57Z",
     "intuitentityid": "58",
-    "intuitaccountid": "9341458780590860"
+    "intuitaccountid": "<sandbox-company-id>"
   }
 ]
 ```
 
-(This is the actual test event. Slashbin's Incoming Data view displays it wrapped as `{"items": [ … ]}`.)
+(This is the actual test event, with the app identifier and company ID replaced by placeholders. Slashbin's Incoming Data view displays it wrapped as `{"items": [ … ]}`.)
 
 | Field | Meaning | Old `eventNotifications` equivalent |
 |---|---|---|
@@ -52,6 +52,19 @@ Intuit moved QuickBooks webhooks to CloudEvents. The cutover was extended to 202
 | `intuitaccountid` | QuickBooks company (realm) ID. **Read it per element, not once per request.** | `realmId` |
 | `time` | When the change happened | `lastUpdated` |
 | `data` | Empty or absent by design. Notices say *what* changed, not the new values. | none |
+
+**Parser changes for CloudEvents** (`parseQboWebhook`, see the status table below):
+
+- Accept a top-level array, plus whatever wrapper Slashbin forwards (see "To confirm before Phase 5", item 1).
+- Split `type` into entity and operation: `qbo.invoice.updated.v1` → `Invoice` / `Update`. Match the entity case-insensitively, since it arrives in lowercase.
+- Map each operation to the capitalised name the rest of the code expects: `created` → `Create`, `updated` → `Update`, `deleted` → `Delete`, `merged` → `Merge`. `planQboFetches` only skips the fetch for the exact string `Delete`, so an unmapped `deleted` would be fetched instead.
+- Map `intuitentityid` → `id`, `intuitaccountid` → `realmId`, `time` → `lastUpdated`, and keep the event `id` for dedupe.
+- Handle every element of the batch. Never treat `[0]` as the whole request.
+
+Other code still written for the legacy shape, to update alongside the parser:
+
+- The Settings webhook tester's sample payload (`src/components/settings/integrations.tsx`) uses `eventNotifications`.
+- The header comment in `src/lib/integrations/quickbooks-webhooks.ts` still lists the CloudEvents format as unverified.
 
 ## QuickBooks invoices and payments
 
@@ -72,19 +85,12 @@ QuickBooks Online ──webhook──▶ Slashbin ──forward──▶ POST /a
 
 | Step | Code | Status |
 |---|---|---|
-| Verify the request | `verifyIntuitSignature` in `src/lib/integrations/quickbooks-webhooks.ts` | Built and tested, but see open question 1. Slashbin already checks `intuit-signature`. What Backoffice should verify depends on what Slashbin forwards. |
-| Parse change notices | `parseQboWebhook` | **Needs rework.** It only accepts the legacy `{"eventNotifications": [...]}` shape and throws "missing eventNotifications" on a CloudEvents array, so every current delivery would be rejected. |
+| Verify the request | `verifyIntuitSignature` in `src/lib/integrations/quickbooks-webhooks.ts` | Built and tested, but see "To confirm before Phase 5", item 1. Slashbin already checks `intuit-signature`. What Backoffice should verify depends on what Slashbin forwards. |
+| Parse change notices | `parseQboWebhook` | **Needs rework.** It only accepts the legacy `{"eventNotifications": [...]}` shape and throws "missing eventNotifications" on a CloudEvents array, so every current delivery would be rejected. See "Parser changes for CloudEvents" above. |
 | Dedupe retries; deletes need no fetch; ignore other entities/companies | `planQboFetches` | Built and tested. Logic still applies once fed CloudEvents-derived events. Dedupe should also use the CloudEvents `id`. It currently ignores `Customer`. |
 | Fetch entities from the Accounting API | Server endpoint + OAuth | **Phase 5** |
 | Map QuickBooks Invoice/Payment → Backoffice | `mapInvoice`, `mapPayment` in `src/lib/integrations/quickbooks.ts` | Built and tested |
 | Upsert, out-of-order protection, manual marks | `syncQuickBooks` in `src/lib/domain/quickbooks-sync.ts` | Built and tested |
-
-**Parser changes for CloudEvents:**
-
-- Accept a top-level array, plus whatever wrapper Slashbin forwards (see open question 1).
-- Split `type` into entity and operation: `qbo.invoice.updated.v1` → `Invoice` / `Update`. Match the entity case-insensitively, since it arrives in lowercase.
-- Map `intuitentityid` → `id`, `intuitaccountid` → `realmId`, `time` → `lastUpdated`, and keep the event `id`.
-- Handle every element of the batch. Never treat `[0]` as the whole request.
 
 Gateways retry, so the same notice can arrive more than once or out of order. Fetching by ID and storing QuickBooks' `MetaData.LastUpdatedTime` makes that harmless, because an older version never overwrites a newer one.
 
@@ -96,7 +102,7 @@ Customers start in Backoffice. A customer is usually added to QuickBooks only wh
 
 Lifecycle:
 
-1. **Create in Backoffice.** No QuickBooks link yet (`qbo_customer_id` is null).
+1. **Create in Backoffice.** No QuickBooks link yet (`quickbooksCustomerId` is unset).
 2. **Send to QuickBooks** when ready to invoice. First search QuickBooks by display name or email, because display names must be unique and the customer may already exist there. Link to a match if one is found; otherwise create the customer. Store the returned `Id` and `SyncToken`.
 3. **Echo:** QuickBooks then sends `qbo.customer.created.v1` for that same ID. It's already linked, so just refresh the record. This prevents Backoffice's own writes looping back as new customers.
 4. **`updated`:** fetch the customer and apply only the fields QuickBooks owns (see decisions).
@@ -104,42 +110,15 @@ Lifecycle:
 6. **`deleted`:** QuickBooks doesn't hard-delete customers. It makes them inactive. Proposed: keep the Backoffice customer and mark the link inactive.
 7. **`merged`:** two QuickBooks customers became one. Proposed: point the link at the surviving ID and flag it for review.
 
-Proposed tables (Postgres on Railway; database not built yet):
+**Data needed.** Postgres on Railway is already live (see `railway.md`). Business data is currently one JSON document per workspace (`Workspace.data` in `prisma/schema.prisma`), and the `Customer` type (`src/lib/domain/types.ts`) already has `name`, `billingCadence`, `notes` and a `quickbooksCustomerId` link. The workflow would add:
 
-```sql
-customers (
-  id               uuid primary key,
-  display_name     text not null,
-  email            text,
-  phone            text,
-  billing_address  jsonb,
-  status           text,          -- Backoffice lifecycle: lead, active, ...
-  qbo_customer_id  text unique,   -- null until sent to QuickBooks
-  qbo_sync_token   text,          -- required by QuickBooks on every update
-  qbo_active       boolean,
-  qbo_synced_at    timestamptz,
-  qbo_sync_error   text,
-  created_at       timestamptz,
-  updated_at       timestamptz
-)
+| Data | Fields | Notes |
+|---|---|---|
+| On `Customer` | email, phone, billing address; QuickBooks `SyncToken`, active flag, last synced time, last sync error | `SyncToken` is required by QuickBooks on every update. Which contact fields Backoffice keeps depends on decision 1. |
+| Processed QuickBooks events | CloudEvents `id`, `type`, entity ID, company ID, received/processed time, error | One record per notice, for dedupe and troubleshooting. |
+| QuickBooks connection | company ID, access token, refresh token, expiry | One record (WEPM's company). Tokens stored encrypted, server-side only. Access tokens last 1 hour, refresh tokens about 100 days. |
 
-qbo_events (                       -- one row per CloudEvents notice
-  event_id      text primary key,  -- CloudEvents "id" (dedupe)
-  type          text,
-  entity_id     text,              -- intuitentityid
-  realm_id      text,              -- intuitaccountid
-  received_at   timestamptz,
-  processed_at  timestamptz,
-  error         text
-)
-
-qbo_connection (                   -- one row: WEPM's company
-  realm_id       text primary key,
-  access_token   text,             -- encrypted; expires after 1 hour
-  refresh_token  text,             -- encrypted; expires after about 100 days
-  expires_at     timestamptz
-)
-```
+Whether these stay in the JSON document or move to their own Prisma models is part of the planned split into per-entity tables before production.
 
 Decisions still open:
 
@@ -151,7 +130,7 @@ Decisions still open:
 ## To confirm before Phase 5
 
 1. **What Slashbin forwards to Backoffice.** Slashbin verifies Intuit's `intuit-signature` itself. Still unknown: does the outbound delivery carry Intuit's raw body and header unchanged, Slashbin's own signature, or a reshaped body (its console shows `{"items": [...]}`)? Add a test destination and inspect one delivery. Then decide what `verifyIntuitSignature` should check.
-2. ~~**Webhook format**~~ Resolved: CloudEvents is on and required. The parser must be updated (see above).
+2. **Webhook format (resolved):** CloudEvents is on and required. The parser must be updated (see "Parser changes for CloudEvents").
 3. **Entities:** narrow the subscription from "all" to `Invoice`, `Payment` and `Customer`. Voided invoices arrive as updates with a zero balance.
 4. **Backfill:** webhooks only cover changes after setup, so existing open invoices (and customers) need a one-time import on first connect. Consider QuickBooks' change data capture (`/cdc`) endpoint for periodic catch-up of missed events.
 5. **Endpoint security:** the Backoffice endpoint must reject unsigned or invalid requests, and only accept the expected QuickBooks company (`intuitaccountid`).

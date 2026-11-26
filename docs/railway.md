@@ -47,7 +47,7 @@ The repo already contains what Railway needs: `railway.json` (build, start, heal
 
 - **Sign-in.** There is one owner login from the `AUTH_*` variables, with signed, HttpOnly session cookies (7 days), a sign-in page, sign-out, and a limit of 10 failed attempts per IP per 15 minutes. The current username/password are meant to be temporary: before production holds real data, set a strong password (or move to a proper identity provider / passkeys) and consider two-factor sign-in.
 - **Backups.** Turn on Railway's Postgres backups for the production database.
-- **Integrations.** The Slashbin/QuickBooks webhook endpoints and the read-only QuickBooks connection are not built yet (see `integrations.md`).
+- **Integrations.** The Slashbin/QuickBooks webhook endpoints and the QuickBooks API connection are not built yet (see `integrations.md`).
 
 ## Local development against Postgres
 
