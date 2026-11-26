@@ -4,7 +4,7 @@ export type NavItem = { href: string; label: string; icon: LucideIcon; ready: bo
 
 /** `ready: false` destinations render the “Coming soon” page. */
 export const NAV_ITEMS: NavItem[] = [
-  { href: "/", label: "Overview", icon: Gauge, ready: false },
+  { href: "/", label: "Overview", icon: Gauge, ready: true },
   { href: "/payroll", label: "Payroll", icon: Banknote, ready: true },
   { href: "/contractors", label: "Contractors", icon: Users, ready: true },
   { href: "/bills", label: "Bills & subscriptions", icon: Receipt, ready: true },

@@ -11,6 +11,7 @@ import { EmptyState, ErrorState, LoadingState, PageHeader } from "@/components/u
 import { useNotice } from "@/components/layout/notice";
 import { BackLink } from "@/components/payroll/back-link";
 import { AddProjectDialog, ProjectRows } from "@/components/projects/project-list";
+import { CustomerFinancialsSection } from "@/components/financials/rollups";
 import { byNewest, InvoiceDraftList } from "@/components/projects/invoice-draft-card";
 import { InvoiceRows } from "@/components/cashflow/invoices";
 import { listInvoices } from "@/lib/domain/quickbooks-sync";
@@ -163,6 +164,7 @@ export function CustomerProfileRoute() {
         </div>
         {t.projects.length ? <ProjectRows data={state.data} projects={t.projects} /> : <p className="rounded-xl border border-dashed border-slate-300 p-4 text-sm text-slate-600">No projects yet.</p>}
       </section>
+      <CustomerFinancialsSection data={state.data} customerId={c.id} />
       <CustomerInvoices data={state.data} customerId={c.id} />
       <section aria-labelledby="cust-invoiced" className="mt-8 space-y-3">
         <h2 id="cust-invoiced" className="text-sm font-semibold uppercase tracking-wide text-slate-600">Invoice drafts and invoices</h2>

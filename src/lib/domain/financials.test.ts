@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buildSampleData, SAMPLE_BUSINESS_DATE } from "@/lib/data/sample-fixtures";
 import { listCharges } from "./expenses";
-import { budgetUse, presetRange, projectFinancials } from "./financials";
+import { budgetUse, companyFinancials, customerFinancials, presetRange, projectFinancials } from "./financials";
 import { payForMinutes } from "./money";
 import { rateOn } from "./rates";
 
@@ -90,5 +90,38 @@ describe("project financials", () => {
     expect(presetRange("last_month", "2026-01-15")).toEqual({ from: "2025-12-01", to: "2025-12-31" });
     expect(presetRange("this_year", "2026-11-26")).toEqual({ from: "2026-01-01", to: "2026-12-31" });
     expect(presetRange("lifetime", "2026-11-26")).toBeUndefined();
+  });
+});
+
+describe("roll-ups", () => {
+  it("a customer adds up its projects", () => {
+    const data = buildSampleData();
+    const c = customerFinancials(data, "cust_northwind", TODAY);
+    const parts = ["p_northwind", "p_northwind_disc"].map((id) => projectFinancials(data, id, TODAY));
+    expect(c.projects.map((f) => f.project.id).sort()).toEqual(["p_northwind", "p_northwind_disc"]);
+    expect(c.totals.earnedCents).toBe(parts.reduce((s, f) => s + f.revenue!.earnedCents, 0));
+    expect(c.totals.costCents).toBe(parts.reduce((s, f) => s + f.cost.totalCents, 0));
+    expect(c.totals.marginCents).toBe(c.totals.earnedCents - c.totals.costCents);
+  });
+
+  it("the company separates client margin, internal investment and overhead", () => {
+    const data = buildSampleData();
+    const co = companyFinancials(data, TODAY);
+    expect(co.client.every((f) => f.isClient)).toBe(true);
+    expect(co.internal.map((f) => f.project.id)).toEqual(["p_internal"]);
+    expect(co.internalInvestmentCents).toBe(projectFinancials(data, "p_internal", TODAY).cost.totalCents);
+    // The office monitor (company expense) and company-level recurring charges.
+    expect(co.overhead.some((o) => o.kind === "expense" && o.id === "pex_monitor")).toBe(true);
+    const companyCharges = listCharges(data, TODAY).filter((ch) => ch.projectId === null);
+    expect(co.overheadCents).toBe(32999 + companyCharges.reduce((s, ch) => s + ch.amountCents, 0));
+    expect(co.totalMarginCents).toBe(co.clientTotals.marginCents - co.internalInvestmentCents - co.overheadCents);
+  });
+
+  it("everything adds up to every cost in the period", () => {
+    const data = buildSampleData();
+    const range = { from: "2026-10-01", to: "2026-10-31" };
+    const co = companyFinancials(data, TODAY, range);
+    const allCost = data.projects.reduce((s, p) => s + projectFinancials(data, p.id, TODAY, range).cost.totalCents, 0) + co.overheadCents;
+    expect(co.clientTotals.costCents + co.internalInvestmentCents + co.overheadCents).toBe(allCost);
   });
 });
