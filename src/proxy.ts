@@ -7,9 +7,20 @@ const PUBLIC_PATHS = ["/login", "/api/auth/login", "/api/health"];
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 
 /**
+ * Sample mode keeps all data in the browser and has no sign-in form, so its
+ * pages must open without a session. Read per request (Next.js inlines it at
+ * build time, matching what the browser bundle sees).
+ */
+function isSampleMode(): boolean {
+  return process.env.NEXT_PUBLIC_DATA_MODE !== "live";
+}
+
+/**
  * Request gate for the hosted app (not part of the GitHub Pages preview):
  * 1. API writes from another site are refused (CSRF), including sign-in.
  * 2. Everything except the public paths requires a signed-in session.
+ *    In sample mode, pages are open; the API still requires a session, so a
+ *    server missing NEXT_PUBLIC_DATA_MODE=live never exposes the database.
  */
 export function proxy(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
@@ -19,6 +30,7 @@ export function proxy(request: NextRequest) {
     return NextResponse.json({ error: { kind: "auth", message: "Cross-site request refused." } }, { status: 403, headers: { "cache-control": "no-store" } });
   }
   if (PUBLIC_PATHS.includes(pathname)) return NextResponse.next();
+  if (!isApi && isSampleMode()) return NextResponse.next();
   if (sessionFromRequest(request)) return NextResponse.next();
 
   if (isApi) {
