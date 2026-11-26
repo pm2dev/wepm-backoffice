@@ -5,6 +5,7 @@
  * records and payments are internally consistent.
  */
 import { markInvoiced } from "@/lib/domain/billing";
+import { addProjectExpense } from "@/lib/domain/project-expenses";
 import { SCHEMA_VERSION } from "@/lib/domain/empty";
 import { setPaymentDone, syncQuickBooks } from "@/lib/domain/quickbooks-sync";
 import { listCharges, setChargeAmount, setChargesPaid } from "@/lib/domain/expenses";
@@ -269,6 +270,13 @@ export function buildSampleData(): BackofficeData {
 
   data = addAdjustment(data, { contractorId: "c_maya", kind: "bonus", description: "Launch bonus — member portal", amountCents: 5000 }, "2026-10-27", id).data;
   data = addAdjustment(data, { contractorId: "c_jordan", kind: "reimbursement", description: "Figma seat (October)", amountCents: 8420 }, SAMPLE_BUSINESS_DATE, id).data;
+  // A fixed-fee piece of work paid as a Contractor services expense: owed to Priya on her next payday, counted as project cost.
+  data = addProjectExpense(
+    data,
+    { date: "2026-10-28", vendor: "Priya Nair", description: "Icon set (fixed fee)", amountCents: 60000, category: "contractor_services", projectId: "p_acme", billable: false, paidBy: { kind: "contractor", contractorId: "c_priya" } },
+    "2026-10-28",
+    id,
+  ).data;
 
   const exception: TimeException = {
     id: "exc_s001",

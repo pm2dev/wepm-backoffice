@@ -51,7 +51,7 @@ export abstract class BackofficeRepository {
   addProject = (input: NewProjectInput, today: ISODate) => this.run("addProject", { input, today });
   updateProject = (id: string, input: ProjectInput, today: ISODate) => this.run("updateProject", { id, input, today });
   addProjectExpense = (input: ProjectExpenseInput, today: ISODate) => this.run("addProjectExpense", { input, today });
-  updateProjectExpense = (id: string, input: ProjectExpenseInput) => this.run("updateProjectExpense", { id, input });
+  updateProjectExpense = (id: string, input: ProjectExpenseInput, today: ISODate) => this.run("updateProjectExpense", { id, input, today });
   deleteProjectExpense = (id: string) => this.run("deleteProjectExpense", { id });
   addBillingRate = (input: BillingRateInput) => this.run("addBillingRate", { input });
   removeBillingRate = (id: string) => this.run("removeBillingRate", { id });

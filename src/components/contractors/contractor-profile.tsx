@@ -75,7 +75,7 @@ function ContractorProfilePage({ contractorId }: { contractorId: string }) {
           {formatHours(stats.operationalMinutes)} from wepm.app · {formatHours(stats.historicalMinutes)} imported
         </Stat>
         <Stat label="Lifetime earnings" value={formatCents(stats.totalEarningsCents)}>
-          {formatCents(stats.hourlyEarningsCents)} hourly + {formatCents(stats.bonusCents)} bonuses
+          {formatCents(stats.hourlyEarningsCents)} hourly + {formatCents(stats.bonusCents)} bonuses{stats.fixedFeeCents ? ` + ${formatCents(stats.fixedFeeCents)} fixed fees` : ""}
           {stats.missingRateMinutes > 0 ? (
             <span className="block text-red-700">
               Excludes {formatHours(stats.missingRateMinutes)} with no rate

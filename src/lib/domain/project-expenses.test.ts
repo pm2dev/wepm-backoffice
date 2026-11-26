@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { buildSampleData, SAMPLE_BUSINESS_DATE } from "@/lib/data/sample-fixtures";
 import { FormError } from "./billing";
-import type { IdFactory } from "./payroll";
-import { addProjectExpense, deleteProjectExpense, expensesFor, expenseTotals, updateProjectExpense, type ProjectExpenseInput } from "./project-expenses";
+import { contractorStats } from "./contractors";
+import { listObligations, recordPayment, type IdFactory } from "./payroll";
+import { addProjectExpense, deleteProjectExpense, expensesFor, expenseTotals, owedFor, updateProjectExpense, type ProjectExpenseInput } from "./project-expenses";
 
 const TODAY = SAMPLE_BUSINESS_DATE;
 let n = 0;
@@ -57,8 +58,10 @@ describe("project expenses", () => {
   });
 
   it("edits keep the id and created date; delete removes it", () => {
-    let { data, expense } = addProjectExpense(buildSampleData(), iphone, TODAY, ids);
-    ({ data } = updateProjectExpense(data, expense.id, { ...iphone, amountCents: 89900 }));
+    const added = addProjectExpense(buildSampleData(), iphone, TODAY, ids);
+    const expense = added.expense;
+    let data = added.data;
+    ({ data } = updateProjectExpense(data, expense.id, { ...iphone, amountCents: 89900 }, TODAY, ids));
     const edited = data.projectExpenses.find((x) => x.id === expense.id)!;
     expect(edited).toMatchObject({ amountCents: 89900, createdOn: TODAY });
     data = deleteProjectExpense(data, expense.id);
@@ -68,6 +71,54 @@ describe("project expenses", () => {
 
   it("totals separate billable from all cost", () => {
     const totals = expenseTotals(expensesFor(buildSampleData(), "p_acme"));
-    expect(totals).toEqual({ totalCents: 79900 + 9900, billableCents: 9900 });
+    expect(totals).toEqual({ totalCents: 79900 + 9900 + 60000, billableCents: 9900 });
+  });
+});
+
+describe("expenses paid by a contractor", () => {
+  const byJordan: ProjectExpenseInput = { ...iphone, vendor: "Figma", description: "Design seat", amountCents: 1500, category: "software", paidBy: { kind: "contractor", contractorId: "c_jordan" } };
+
+  it("creates a linked reimbursement due on the contractor's next payday", () => {
+    const { data, expense } = addProjectExpense(buildSampleData(), byJordan, TODAY, ids);
+    const owed = owedFor(data, expense.id)!;
+    expect(owed).toMatchObject({ contractorId: "c_jordan", kind: "reimbursement", amountCents: 1500, projectExpenseId: expense.id, description: "Figma: Design seat · Member portal" });
+    expect(owed.dueDate >= TODAY).toBe(true);
+    expect(listObligations(data, TODAY).some((o) => o.ref?.id === owed.id && o.outstandingCents === 1500)).toBe(true);
+  });
+
+  it("Contractor services is a fixed fee that counts as earnings, not a reimbursement", () => {
+    const before = contractorStats(buildSampleData(), "c_jordan", TODAY);
+    const { data, expense } = addProjectExpense(buildSampleData(), { ...byJordan, vendor: "Jordan", description: "Icon set", amountCents: 200000, category: "contractor_services" }, TODAY, ids);
+    expect(owedFor(data, expense.id)!.kind).toBe("fixed_fee");
+    const after = contractorStats(data, "c_jordan", TODAY);
+    expect(after.totalEarningsCents - before.totalEarningsCents).toBe(200000);
+    expect(after.reimbursementCents).toBe(before.reimbursementCents);
+  });
+
+  it("while unpaid, edits follow through: amount, payee and switching to a card", () => {
+    let { data, expense } = addProjectExpense(buildSampleData(), byJordan, TODAY, ids);
+    ({ data } = updateProjectExpense(data, expense.id, { ...byJordan, amountCents: 2500, paidBy: { kind: "contractor", contractorId: "c_maya" } }, TODAY, ids));
+    expect(owedFor(data, expense.id)).toMatchObject({ contractorId: "c_maya", amountCents: 2500 });
+    ({ data } = updateProjectExpense(data, expense.id, { ...byJordan, paidBy: { kind: "account", accountId: "acct_amex" } }, TODAY, ids));
+    expect(owedFor(data, expense.id)).toBeUndefined();
+    ({ data, expense } = updateProjectExpense(data, expense.id, byJordan, TODAY, ids));
+    expect(owedFor(data, expense.id)).toMatchObject({ contractorId: "c_jordan", amountCents: 1500 });
+  });
+
+  it("after a payment, amount and payee are locked and the expense can't be deleted", () => {
+    let { data, expense } = addProjectExpense(buildSampleData(), byJordan, TODAY, ids);
+    const owed = owedFor(data, expense.id)!;
+    data = recordPayment(data, { contractorId: "c_jordan", paidOn: TODAY, method: "zelle", allocations: [{ obligation: { kind: "reimbursement", id: owed.id }, amountCents: 1000 }] }, TODAY, ids).data;
+    expect(() => updateProjectExpense(data, expense.id, { ...byJordan, amountCents: 900 }, TODAY, ids)).toThrow(FormError);
+    expect(() => updateProjectExpense(data, expense.id, { ...byJordan, paidBy: { kind: "account", accountId: "acct_amex" } }, TODAY, ids)).toThrow(FormError);
+    ({ data, expense } = updateProjectExpense(data, expense.id, { ...byJordan, notes: "Annual seat" }, TODAY, ids));
+    expect(expense.notes).toBe("Annual seat");
+    expect(() => deleteProjectExpense(data, expense.id)).toThrow(/can't be deleted/);
+  });
+
+  it("deleting an unpaid contractor expense removes what's owed", () => {
+    const { data, expense } = addProjectExpense(buildSampleData(), byJordan, TODAY, ids);
+    const after = deleteProjectExpense(data, expense.id);
+    expect(after.adjustments.some((a) => a.projectExpenseId === expense.id)).toBe(false);
   });
 });

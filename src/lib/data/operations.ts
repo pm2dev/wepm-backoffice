@@ -83,8 +83,8 @@ export const OPERATIONS = {
     const r = projectExpenses.addProjectExpense(d, a.input, a.today);
     return { data: r.data, result: r.expense };
   },
-  updateProjectExpense: (d: BackofficeData, a: { id: string; input: projectExpenses.ProjectExpenseInput }) => {
-    const r = projectExpenses.updateProjectExpense(d, a.id, a.input);
+  updateProjectExpense: (d: BackofficeData, a: { id: string; input: projectExpenses.ProjectExpenseInput; today: string }) => {
+    const r = projectExpenses.updateProjectExpense(d, a.id, a.input, a.today);
     return { data: r.data, result: r.expense };
   },
   deleteProjectExpense: (d: BackofficeData, a: { id: string }) => unit(projectExpenses.deleteProjectExpense(d, a.id)),

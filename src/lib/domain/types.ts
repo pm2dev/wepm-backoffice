@@ -205,7 +205,8 @@ export type FinalizedPayroll = {
   lateApproved: boolean;
 };
 
-export type AdjustmentKind = "bonus" | "reimbursement";
+/** `fixed_fee`: owed for fixed-fee work entered as a Contractor services expense. Counts as earnings. */
+export type AdjustmentKind = "bonus" | "reimbursement" | "fixed_fee";
 
 export type Adjustment = {
   id: string;
@@ -215,6 +216,8 @@ export type Adjustment = {
   amountCents: Cents;
   createdOn: ISODate;
   dueDate: ISODate;
+  /** Set when the amount owed comes from a contractor-paid project expense. */
+  projectExpenseId?: string;
 };
 
 export type ObligationKind = "payroll" | AdjustmentKind;
@@ -289,8 +292,12 @@ export type ExpenseCharge = {
 
 export type ExpenseCategory = "software" | "hardware" | "travel" | "contractor_services" | "other";
 
-/** Who paid for a project expense. (A contractor payee comes with reimbursements.) */
-export type ExpensePayer = { kind: "account"; accountId: string };
+/**
+ * Who paid for a project expense: one of the owner's cards or accounts, or a
+ * contractor (who is then owed it: a reimbursement, or a fixed fee for
+ * Contractor services).
+ */
+export type ExpensePayer = { kind: "account"; accountId: string } | { kind: "contractor"; contractorId: string };
 
 /**
  * A one-off cost tied to one project, or to the company (overhead) when
