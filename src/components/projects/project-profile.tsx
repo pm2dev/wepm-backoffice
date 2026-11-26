@@ -20,7 +20,7 @@ import { routes } from "@/lib/routes";
 import { AddProjectExpenseDialog, ProjectExpenseList } from "@/components/expenses/project-expenses";
 import { expensesFor } from "@/lib/domain/project-expenses";
 import { BreakdownCard } from "./breakdown-card";
-import { BillingRecords } from "./invoiced";
+import { InvoiceDraftList } from "./invoice-draft-card";
 import { billingLabel, BillingRatesCard } from "./billing-rates";
 import { ProjectForm } from "./project-form";
 
@@ -75,7 +75,7 @@ function ProjectProfile({ data, project: p }: { data: BackofficeData; project: P
           {p.billable && p.customerId ? (
             <section aria-labelledby="uninvoiced-heading" className="space-y-3">
               <h2 id="uninvoiced-heading" className="text-sm font-semibold uppercase tracking-wide text-slate-600">Ready to invoice</h2>
-              {breakdown ? <BreakdownCard b={breakdown} showProjectLink={false} /> : <p className="rounded-xl border border-dashed border-slate-300 p-4 text-sm text-slate-600">No uninvoiced billable hours.</p>}
+              {breakdown ? <BreakdownCard b={breakdown} showProjectLink={false} /> : <p className="rounded-xl border border-dashed border-slate-300 p-4 text-sm text-slate-600">No uninvoiced billable hours or expenses.</p>}
             </section>
           ) : (
             <Card className="p-4 text-sm text-slate-700">
@@ -83,8 +83,8 @@ function ProjectProfile({ data, project: p }: { data: BackofficeData; project: P
             </Card>
           )}
           <section aria-labelledby="history-heading" className="space-y-3">
-            <h2 id="history-heading" className="text-sm font-semibold uppercase tracking-wide text-slate-600">Invoiced</h2>
-            <BillingRecords data={data} records={s.records} showProject={false} />
+            <h2 id="history-heading" className="text-sm font-semibold uppercase tracking-wide text-slate-600">Invoice drafts and invoices</h2>
+            <InvoiceDraftList data={data} drafts={s.drafts} showProject={false} emptyText="No invoice drafts yet." />
           </section>
           <section aria-labelledby="expenses-heading" className="space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2">

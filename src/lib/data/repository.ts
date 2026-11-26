@@ -55,8 +55,14 @@ export abstract class BackofficeRepository {
   deleteProjectExpense = (id: string) => this.run("deleteProjectExpense", { id });
   addBillingRate = (input: BillingRateInput) => this.run("addBillingRate", { input });
   removeBillingRate = (id: string) => this.run("removeBillingRate", { id });
-  markInvoiced = (input: { projectId: string; through?: ISODate; invoicedOn: ISODate; quickbooksInvoiceRef?: string }) => this.run("markInvoiced", { input });
-  removeBillingRecord = (id: string) => this.run("removeBillingRecord", { id });
+  /** Reserve a project's billable hours and expenses (through a date) in a new invoice draft. */
+  createInvoiceDraft = (input: { projectId: string; throughDate: ISODate }, today: ISODate) => this.run("createInvoiceDraft", { input, today });
+  removeDraftLine = (draftId: string, lineId: string) => this.run("removeDraftLine", { draftId, lineId });
+  /** After creating the invoice in QuickBooks. Never marks anything paid. */
+  markDraftInvoiced = (input: { draftId: string; invoicedOn: ISODate; quickbooksInvoiceRef?: string }) => this.run("markDraftInvoiced", { input });
+  linkDraft = (input: { draftId: string; qbInvoiceId: string }) => this.run("linkDraft", { input });
+  /** Linked → Invoiced → Draft → deleted. */
+  undoDraftStep = (draftId: string) => this.run("undoDraftStep", { draftId });
 
   // QuickBooks invoices & payments (QuickBooks is the source of truth; data arrives server-side via Slashbin)
   /** Owner override: mark an invoice paid in Backoffice (null clears it). Never written to QuickBooks. */

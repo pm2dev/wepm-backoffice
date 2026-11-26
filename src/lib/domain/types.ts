@@ -100,21 +100,44 @@ export type BillingRate = {
   rateCents: Cents;
 };
 
-/** A billing line preserved when hours are marked invoiced. */
-export type BillingLine = { task: string; minutes: number; rateCents: Cents; amountCents: Cents };
+/** Billed hours for one task at one rate, preserved on an invoice draft. */
+export type InvoiceLaborLine = {
+  id: string;
+  task: string;
+  minutes: number;
+  rateCents: Cents;
+  amountCents: Cents;
+  firstWorkDate: ISODate;
+  lastWorkDate: ISODate;
+  entryIds: string[];
+};
 
-/** Hours the owner marked invoiced after creating the invoice in QuickBooks. */
-export type BillingRecord = {
+/** A billable project expense on an invoice draft, billed at cost. */
+export type InvoiceExpenseLine = { id: string; expenseId: string; date: ISODate; vendor: string; description: string; amountCents: Cents };
+
+export type InvoiceDraftStatus = "draft" | "invoiced" | "linked";
+
+/**
+ * What Backoffice prepares for one project's invoice (ADR-0002): uninvoiced
+ * billable hours and billable expenses up to a through date. Draft → Invoiced
+ * (created in QuickBooks) → Linked (matched to the synced QuickBooks invoice).
+ * Items on any draft are reserved so they can't be billed twice.
+ */
+export type InvoiceDraft = {
   id: string;
   projectId: string;
   customerId: string;
-  entryIds: string[];
-  firstWorkDate: ISODate;
-  lastWorkDate: ISODate;
-  lines: BillingLine[];
+  throughDate: ISODate;
+  status: InvoiceDraftStatus;
+  createdOn: ISODate;
+  laborLines: InvoiceLaborLine[];
+  expenseLines: InvoiceExpenseLine[];
   amountCents: Cents;
-  invoicedOn: ISODate;
+  invoicedOn?: ISODate;
+  /** QuickBooks invoice number the owner typed, or the linked invoice's DocNumber. */
   quickbooksInvoiceRef?: string;
+  /** QuickBooks Invoice.Id once linked. */
+  qbInvoiceId?: string;
 };
 
 export type TimeEntrySource = "wepm" | "harvest_import" | "workbook_import";
@@ -380,7 +403,7 @@ export type IntegrationSettings = {
 };
 
 export type BackofficeData = {
-  schemaVersion: 10;
+  schemaVersion: 11;
   contractors: Contractor[];
   rates: ContractorRate[];
   projects: Project[];
@@ -396,7 +419,7 @@ export type BackofficeData = {
   expenseCharges: ExpenseCharge[];
   projectExpenses: ProjectExpense[];
   customers: Customer[];
-  billingRecords: BillingRecord[];
+  invoiceDrafts: InvoiceDraft[];
   invoiceReceipts: InvoiceReceipt[];
   quickbooksInvoices: QuickBooksInvoice[];
   integrations: IntegrationSettings;

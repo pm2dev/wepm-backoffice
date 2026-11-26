@@ -12,6 +12,7 @@ import { isISODate } from "@/lib/domain/dates";
 import { formatCents } from "@/lib/domain/money";
 import { routes } from "@/lib/routes";
 import { BreakdownCard } from "./breakdown-card";
+import { byNewest, InvoiceDraftList } from "./invoice-draft-card";
 import { ProjectsTabs } from "./projects-tabs";
 
 export function ReadyToInvoicePage() {
@@ -23,10 +24,11 @@ export function ReadyToInvoicePage() {
   const breakdown = useMemo(() => (state.status === "ready" ? billingBreakdown(state.data, through || undefined) : []), [state, through]);
   const total = breakdown.reduce((s, c) => s + c.knownAmountCents, 0);
   const incomplete = breakdown.some((c) => !c.complete);
+  const openDrafts = state.status === "ready" ? state.data.invoiceDrafts.filter((d) => d.status !== "linked").sort(byNewest) : [];
 
   return (
     <>
-      <PageHeader title="Projects & billing" description="Approved, billable hours not yet invoiced — what to bill each customer in QuickBooks." />
+      <PageHeader title="Projects & billing" description="Approved billable hours and billable expenses not yet on an invoice, and the drafts you're working on." />
       <ProjectsTabs />
       {state.status === "loading" ? <LoadingState /> : null}
       {state.status === "error" ? <ErrorState message={state.message} /> : null}
@@ -39,7 +41,7 @@ export function ReadyToInvoicePage() {
               {incomplete ? <p className="text-xs text-red-700">Some hours have no billing rate yet</p> : <p className="text-xs text-slate-600">All hours priced</p>}
             </Card>
             <div className="sm:w-56">
-              <Field label="Work through (optional)" htmlFor="through" hint="Limit to hours worked on or before a date.">
+              <Field label="Work through (optional)" htmlFor="through" hint="Limit to hours and expenses on or before a date.">
                 <Input
                   id="through"
                   type="date"
@@ -56,8 +58,16 @@ export function ReadyToInvoicePage() {
             </div>
           </div>
 
+          {openDrafts.length ? (
+            <section aria-labelledby="open-drafts" className="space-y-3">
+              <h2 id="open-drafts" className="text-lg font-semibold text-slate-900">Open drafts ({openDrafts.length})</h2>
+              <p className="text-sm text-slate-600">Drafts to create in QuickBooks, and invoices waiting to be linked once QuickBooks syncs them.</p>
+              <InvoiceDraftList data={state.data} drafts={openDrafts} emptyText="" />
+            </section>
+          ) : null}
+
           {breakdown.length === 0 ? (
-            <EmptyState title="Nothing to invoice">New approved billable hours will appear here.</EmptyState>
+            <EmptyState title="Nothing to invoice">New approved billable hours and billable expenses will appear here.</EmptyState>
           ) : (
             breakdown.map((c) => (
               <section key={c.customer.id} aria-labelledby={`cust-${c.customer.id}`} className="space-y-3">

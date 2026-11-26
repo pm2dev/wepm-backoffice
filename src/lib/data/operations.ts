@@ -9,6 +9,7 @@ import * as contractors from "@/lib/domain/contractors";
 import * as expenses from "@/lib/domain/expenses";
 import { commitImport } from "@/lib/domain/history-import";
 import { emptyData } from "@/lib/domain/empty";
+import * as drafts from "@/lib/domain/invoice-drafts";
 import * as payroll from "@/lib/domain/payroll";
 import * as projectExpenses from "@/lib/domain/project-expenses";
 import * as qb from "@/lib/domain/quickbooks-sync";
@@ -93,11 +94,14 @@ export const OPERATIONS = {
     return { data: r.data, result: r.rate };
   },
   removeBillingRate: (d: BackofficeData, a: { id: string }) => unit(billing.removeBillingRate(d, a.id)),
-  markInvoiced: (d: BackofficeData, a: { input: Parameters<typeof billing.markInvoiced>[1] }) => {
-    const r = billing.markInvoiced(d, a.input);
-    return { data: r.data, result: r.record };
+  createInvoiceDraft: (d: BackofficeData, a: { input: { projectId: string; throughDate: string }; today: string }) => {
+    const r = drafts.createInvoiceDraft(d, a.input, a.today);
+    return { data: r.data, result: r.draft };
   },
-  removeBillingRecord: (d: BackofficeData, a: { id: string }) => unit(billing.removeBillingRecord(d, a.id)),
+  removeDraftLine: (d: BackofficeData, a: { draftId: string; lineId: string }) => unit(drafts.removeDraftLine(d, a.draftId, a.lineId)),
+  markDraftInvoiced: (d: BackofficeData, a: { input: { draftId: string; invoicedOn: string; quickbooksInvoiceRef?: string } }) => unit(drafts.markDraftInvoiced(d, a.input)),
+  linkDraft: (d: BackofficeData, a: { input: { draftId: string; qbInvoiceId: string } }) => unit(drafts.linkDraft(d, a.input)),
+  undoDraftStep: (d: BackofficeData, a: { draftId: string }) => unit(drafts.undoDraftStep(d, a.draftId)),
   syncQuickBooks: (d: BackofficeData, a: { batch: Parameters<typeof qb.syncQuickBooks>[1]; today: string }) => {
     const r = qb.syncQuickBooks(d, a.batch, a.today);
     return { data: r.data, result: r };

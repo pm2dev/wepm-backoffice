@@ -11,6 +11,7 @@ import { Field, Input, Select, Textarea } from "@/components/ui/field";
 import { useNotice } from "@/components/layout/notice";
 import { useBackoffice } from "@/lib/data/backoffice-provider";
 import { FormError } from "@/lib/domain/billing";
+import { draftForExpense } from "@/lib/domain/invoice-drafts";
 import { formatDate } from "@/lib/domain/dates";
 import { accountLabel } from "@/lib/domain/expenses";
 import { assignmentLabel } from "@/lib/domain/labels";
@@ -85,6 +86,10 @@ export function ProjectExpenseList({ data, expenses, showProject, emptyText }: {
                   <Badge>{EXPENSE_CATEGORY_LABELS[x.category]}</Badge>
                   {x.billable ? <Badge tone="info">Billable at cost</Badge> : null}
                   {owed ? <OwedBadge data={data} owed={owed} /> : null}
+                  {(() => {
+                    const d = draftForExpense(data, x.id);
+                    return d ? <Badge tone={d.status === "draft" ? "warning" : "success"}>{d.status === "draft" ? "On an invoice draft" : "Invoiced"}</Badge> : null;
+                  })()}
                   {x.receiptUrl ? (
                     <a href={x.receiptUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-blue-700 underline-offset-2 hover:underline">
                       Receipt <ExternalLink className="size-3" aria-hidden />

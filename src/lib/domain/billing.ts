@@ -2,7 +2,7 @@ import { compareDates, isISODate, type ISODate } from "./dates";
 import { ingestApprovedTime } from "./ingest";
 import { payForMinutes, type Cents } from "./money";
 import { DomainError, randomId, type IdFactory } from "./payroll";
-import type { BackofficeData, BillingCadence, BillingLine, BillingRate, BillingRecord, Customer, Project, ProjectStatus, TimeEntry } from "./types";
+import type { BackofficeData, BillingCadence, BillingRate, Customer, Project, ProjectExpense, ProjectStatus, TimeEntry } from "./types";
 
 export const CADENCE_LABEL: Record<BillingCadence, string> = {
   weekly: "Weekly",
@@ -199,33 +199,56 @@ export function reprocessExceptions(data: BackofficeData, today: ISODate, newId:
 // Billing breakdown
 // ---------------------------------------------------------------------------
 
-export function invoicedEntryIds(data: BackofficeData): Set<string> {
+/** Time entries already on an invoice draft (any status) can't go on another. */
+export function reservedEntryIds(data: BackofficeData): Set<string> {
   const ids = new Set<string>();
-  for (const r of data.billingRecords) for (const id of r.entryIds) ids.add(id);
+  for (const d of data.invoiceDrafts) for (const l of d.laborLines) for (const id of l.entryIds) ids.add(id);
   return ids;
 }
 
-/** Approved, billable, not-yet-invoiced operational hours. Internal and nonbillable time never appears. */
+/** Expenses already on an invoice draft (any status). */
+export function reservedExpenseIds(data: BackofficeData): Set<string> {
+  return new Set(data.invoiceDrafts.flatMap((d) => d.expenseLines.map((l) => l.expenseId)));
+}
+
+/** The project's billing cadence, else its customer's. */
+export function cadenceFor(data: BackofficeData, projectId: string): BillingCadence {
+  const p = data.projects.find((x) => x.id === projectId);
+  return p?.billingCadence ?? data.customers.find((c) => c.id === p?.customerId)?.billingCadence ?? "monthly";
+}
+
+/** Billable expenses on billable customer projects that aren't on a draft yet. */
+export function uninvoicedExpenses(data: BackofficeData, through?: ISODate): ProjectExpense[] {
+  const billable = new Set(data.projects.filter((p) => p.billable && p.customerId).map((p) => p.id));
+  const reserved = reservedExpenseIds(data);
+  return data.projectExpenses.filter((x) => x.billable && x.projectId && billable.has(x.projectId) && !reserved.has(x.id) && (!through || x.date <= through));
+}
+
+/** Approved, billable operational hours not on an invoice draft yet. Internal and nonbillable time never appears. */
 export function uninvoicedEntries(data: BackofficeData, through?: ISODate): TimeEntry[] {
   const billable = new Set(data.projects.filter((p) => p.billable && p.customerId).map((p) => p.id));
-  const invoiced = invoicedEntryIds(data);
+  const reserved = reservedEntryIds(data);
   return data.timeEntries.filter(
-    (e) => e.source === "wepm" && e.approvedAt && e.projectId && billable.has(e.projectId) && !invoiced.has(e.id) && (!through || e.workDate <= through),
+    (e) => e.source === "wepm" && e.approvedAt && e.projectId && billable.has(e.projectId) && !reserved.has(e.id) && (!through || e.workDate <= through),
   );
 }
 
-export type BreakdownLine = { task: string; minutes: number; rateCents: Cents | null; amountCents: Cents | null; entryCount: number; firstWorkDate: ISODate; lastWorkDate: ISODate };
+export type BreakdownLine = { task: string; minutes: number; rateCents: Cents | null; amountCents: Cents | null; entryCount: number; entryIds: string[]; firstWorkDate: ISODate; lastWorkDate: ISODate };
 
 export type ProjectBreakdown = {
   project: Project;
   entries: TimeEntry[];
   lines: BreakdownLine[];
   minutes: number;
-  /** Total of lines with a known rate. */
+  /** Billable expenses not on a draft yet, billed at cost. */
+  expenses: ProjectExpense[];
+  expenseCents: Cents;
+  /** Hours with a known rate plus billable expenses. */
   knownAmountCents: Cents;
   /** Lines without a rate — the project's total is incomplete until they're priced. */
   missingRateTasks: string[];
   complete: boolean;
+  /** Earliest and latest date across hours and expenses. */
   firstWorkDate: ISODate;
   lastWorkDate: ISODate;
 };
@@ -241,6 +264,11 @@ export function billingBreakdown(data: BackofficeData, through?: ISODate): Custo
   const entries = uninvoicedEntries(data, through);
   const byProject = new Map<string, TimeEntry[]>();
   for (const e of entries) byProject.set(e.projectId!, [...(byProject.get(e.projectId!) ?? []), e]);
+  const expensesByProject = new Map<string, ProjectExpense[]>();
+  for (const x of uninvoicedExpenses(data, through)) {
+    expensesByProject.set(x.projectId!, [...(expensesByProject.get(x.projectId!) ?? []), x]);
+    if (!byProject.has(x.projectId!)) byProject.set(x.projectId!, []);
+  }
 
   const projectBreakdowns: ProjectBreakdown[] = [];
   for (const [projectId, list] of byProject) {
@@ -258,17 +286,21 @@ export function billingBreakdown(data: BackofficeData, through?: ISODate): Custo
       .map(({ task, rate, entries: es }) => {
         const minutes = es.reduce((s, e) => s + e.minutes, 0);
         const dates = es.map((e) => e.workDate).sort(compareDates);
-        return { task, minutes, rateCents: rate, amountCents: rate === null ? null : payForMinutes(minutes, rate), entryCount: es.length, firstWorkDate: dates[0], lastWorkDate: dates[dates.length - 1] };
+        return { task, minutes, rateCents: rate, amountCents: rate === null ? null : payForMinutes(minutes, rate), entryCount: es.length, entryIds: es.map((e) => e.id), firstWorkDate: dates[0], lastWorkDate: dates[dates.length - 1] };
       })
       .sort((a, b) => a.task.localeCompare(b.task) || compareDates(a.firstWorkDate, b.firstWorkDate));
-    const dates = list.map((e) => e.workDate).sort(compareDates);
+    const expenses = (expensesByProject.get(projectId) ?? []).sort((a, b) => compareDates(a.date, b.date));
+    const expenseCents = expenses.reduce((s, x) => s + x.amountCents, 0);
+    const dates = [...list.map((e) => e.workDate), ...expenses.map((x) => x.date)].sort(compareDates);
     const missing = [...new Set(lines.filter((l) => l.rateCents === null).map((l) => l.task))];
     projectBreakdowns.push({
       project,
       entries: list.sort((a, b) => compareDates(a.workDate, b.workDate)),
       lines,
       minutes: lines.reduce((s, l) => s + l.minutes, 0),
-      knownAmountCents: lines.reduce((s, l) => s + (l.amountCents ?? 0), 0),
+      expenses,
+      expenseCents,
+      knownAmountCents: lines.reduce((s, l) => s + (l.amountCents ?? 0), 0) + expenseCents,
       missingRateTasks: missing,
       complete: missing.length === 0,
       firstWorkDate: dates[0],
@@ -285,56 +317,20 @@ export function billingBreakdown(data: BackofficeData, through?: ISODate): Custo
     .sort((a, b) => a.customer.name.localeCompare(b.customer.name));
 }
 
-/**
- * After creating the invoice in QuickBooks, mark the project's uninvoiced
- * hours (through a date) invoiced. Preserves the billed amount. Does not mark
- * the invoice or any contractor paid.
- */
-export function markInvoiced(
-  data: BackofficeData,
-  input: { projectId: string; through?: ISODate; invoicedOn: ISODate; quickbooksInvoiceRef?: string },
-  newId: IdFactory = randomId,
-): { data: BackofficeData; record: BillingRecord } {
-  if (!isISODate(input.invoicedOn)) throw new DomainError("Enter the invoice date.");
-  const breakdown = billingBreakdown(data, input.through)
-    .flatMap((c) => c.projects)
-    .find((p) => p.project.id === input.projectId);
-  if (!breakdown) throw new DomainError("There are no uninvoiced billable hours for this project.");
-  if (!breakdown.complete) throw new DomainError(`Add a billing rate for ${breakdown.missingRateTasks.join(", ")} before marking these hours invoiced.`);
-  const lines: BillingLine[] = breakdown.lines.map((l) => ({ task: l.task, minutes: l.minutes, rateCents: l.rateCents!, amountCents: l.amountCents! }));
-  const record: BillingRecord = {
-    id: newId("bill"),
-    projectId: breakdown.project.id,
-    customerId: breakdown.project.customerId!,
-    entryIds: breakdown.entries.map((e) => e.id),
-    firstWorkDate: breakdown.firstWorkDate,
-    lastWorkDate: breakdown.lastWorkDate,
-    lines,
-    amountCents: breakdown.knownAmountCents,
-    invoicedOn: input.invoicedOn,
-    quickbooksInvoiceRef: input.quickbooksInvoiceRef?.trim() || undefined,
-  };
-  return { data: { ...data, billingRecords: [...data.billingRecords, record] }, record };
-}
-
-/** Undo a mistaken "mark invoiced": the hours return to the next billing recommendation. */
-export function removeBillingRecord(data: BackofficeData, id: string): BackofficeData {
-  if (!data.billingRecords.some((r) => r.id === id)) throw new DomainError("Invoice record not found.");
-  return { ...data, billingRecords: data.billingRecords.filter((r) => r.id !== id) };
-}
-
 /** Per-project uninvoiced and invoiced totals, for lists. */
 export function projectSummary(data: BackofficeData, projectId: string) {
   const all = data.timeEntries.filter((e) => e.projectId === projectId && e.source === "wepm" && e.approvedAt);
   const breakdown = billingBreakdown(data).flatMap((c) => c.projects).find((p) => p.project.id === projectId);
-  const records = data.billingRecords.filter((r) => r.projectId === projectId);
+  const drafts = data.invoiceDrafts.filter((d) => d.projectId === projectId);
+  const invoiced = drafts.filter((d) => d.status !== "draft");
   return {
     approvedMinutes: all.reduce((s, e) => s + e.minutes, 0),
     uninvoicedMinutes: breakdown?.minutes ?? 0,
     uninvoicedAmountCents: breakdown?.knownAmountCents ?? 0,
     uninvoicedComplete: breakdown?.complete ?? true,
-    invoicedAmountCents: records.reduce((s, r) => s + r.amountCents, 0),
-    records: records.sort((a, b) => (a.invoicedOn < b.invoicedOn ? 1 : -1)),
+    draftAmountCents: drafts.filter((d) => d.status === "draft").reduce((s, d) => s + d.amountCents, 0),
+    invoicedAmountCents: invoiced.reduce((s, d) => s + d.amountCents, 0),
+    drafts: drafts.sort((a, b) => ((a.invoicedOn ?? a.createdOn) < (b.invoicedOn ?? b.createdOn) ? 1 : -1)),
   };
 }
 
