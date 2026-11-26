@@ -176,3 +176,68 @@ export function presetRange(preset: Exclude<RangePreset, "custom">, today: ISODa
   if (preset === "this_year") return { from: `${today.slice(0, 4)}-01-01`, to: `${today.slice(0, 4)}-12-31` };
   return undefined;
 }
+
+// ---------------------------------------------------------------------------
+// Roll-ups: customer and company
+// ---------------------------------------------------------------------------
+
+export type RevenueTotals = { earnedCents: Cents; invoicedCents: Cents; collectedCents: Cents; costCents: Cents; marginCents: Cents };
+
+function sumClient(list: ProjectFinancials[]): RevenueTotals {
+  const t: RevenueTotals = { earnedCents: 0, invoicedCents: 0, collectedCents: 0, costCents: 0, marginCents: 0 };
+  for (const f of list) {
+    t.earnedCents += f.revenue?.earnedCents ?? 0;
+    t.invoicedCents += f.revenue?.invoicedCents ?? 0;
+    t.collectedCents += f.revenue?.collectedCents ?? 0;
+    t.costCents += f.cost.totalCents;
+  }
+  t.marginCents = t.earnedCents - t.costCents;
+  return t;
+}
+
+/** A customer's projects added up, with each project's figures. */
+export function customerFinancials(data: BackofficeData, customerId: string, today: ISODate, range?: DateRange) {
+  const projects = data.projects
+    .filter((p) => p.customerId === customerId)
+    .map((p) => projectFinancials(data, p.id, today, range))
+    .sort((a, b) => a.project.name.localeCompare(b.project.name));
+  const totals = sumClient(projects);
+  return { projects, totals, hasMissingRates: projects.some((f) => f.missingBillingRates.length || f.missingCostRates.length) };
+}
+
+export type OverheadLine = { kind: "expense" | "recurring"; id: string; date: ISODate; vendor: string; description?: string; amountCents: Cents };
+
+/**
+ * The whole company: client projects (revenue, cost, margin), internal
+ * investment (internal project costs), and overhead (costs on no project).
+ * Total margin = client margin − internal investment − overhead.
+ */
+export function companyFinancials(data: BackofficeData, today: ISODate, range?: DateRange) {
+  const all = data.projects.map((p) => projectFinancials(data, p.id, today, range));
+  const client = all.filter((f) => f.isClient).sort((a, b) => b.cost.totalCents + (b.revenue?.earnedCents ?? 0) - (a.cost.totalCents + (a.revenue?.earnedCents ?? 0)));
+  const internal = all.filter((f) => !f.isClient).sort((a, b) => b.cost.totalCents - a.cost.totalCents);
+  const clientTotals = sumClient(client);
+  const internalInvestmentCents = internal.reduce((s, f) => s + f.cost.totalCents, 0);
+
+  const chargesUntil = range?.to && range.to < today ? range.to : today;
+  const overhead: OverheadLine[] = [
+    ...data.projectExpenses
+      .filter((x) => x.projectId === null && inRange(x.date, range))
+      .map((x): OverheadLine => ({ kind: "expense", id: x.id, date: x.date, vendor: x.vendor, description: x.description || undefined, amountCents: x.amountCents })),
+    ...listCharges(data, chargesUntil)
+      .filter((c) => c.projectId === null && inRange(c.dueDate, range))
+      .map((c): OverheadLine => ({ kind: "recurring", id: c.key, date: c.dueDate, vendor: c.vendor, amountCents: c.amountCents })),
+  ].sort((a, b) => (a.date < b.date ? 1 : -1));
+  const overheadCents = overhead.reduce((s, o) => s + o.amountCents, 0);
+
+  return {
+    client,
+    clientTotals,
+    internal,
+    internalInvestmentCents,
+    overhead,
+    overheadCents,
+    totalMarginCents: clientTotals.marginCents - internalInvestmentCents - overheadCents,
+    hasMissingRates: all.some((f) => f.missingBillingRates.length || f.missingCostRates.length),
+  };
+}
